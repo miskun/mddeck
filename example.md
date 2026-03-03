@@ -157,15 +157,15 @@ You can have [multiple](https://example.com) links [in one](https://example.com)
 
 ```ascii
     +-------------------+
-    |   Terminal Input   |
+    |   Terminal Input  |
     +--------+----------+
              |
     +--------v----------+
-    |    Parse Blocks    |
+    |    Parse Blocks   |
     +--------+----------+
              |
     +--------v----------+
-    |   Render Output    |
+    |   Render Output   |
     +-------------------+
 ```
 
