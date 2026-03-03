@@ -109,6 +109,9 @@ const (
 	BlockANSIArt
 	BlockASCIIArt
 	BlockBrailleArt
+	BlockTaskList
+	BlockTable
+	BlockAlert
 )
 
 // Block represents a parsed content block.

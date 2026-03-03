@@ -261,9 +261,12 @@ Rules:
 |---------|--------|
 | Headings | `#`, `##`, `###` |
 | Paragraphs | Plain text separated by blank lines |
-| Unordered lists | `- item` or `* item` |
-| Ordered lists | `1. item`, `2. item` |
+| Unordered lists | `- item` or `* item` (supports nesting via indentation) |
+| Ordered lists | `1. item`, `2. item` (supports nesting via indentation) |
+| Task lists | `- [ ] unchecked`, `- [x] checked` |
 | Blockquotes | `> text` |
+| Alerts/Callouts | `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!IMPORTANT]`, `> [!CAUTION]` |
+| Tables | Pipe-delimited `\| col \| col \|` with header separator |
 | Fenced code blocks | ` ``` ` with optional language tag |
 | Horizontal rules | `---`, `***`, `___` (when not a slide break) |
 
@@ -273,8 +276,48 @@ Rules:
 |---------|--------|-----------|
 | Bold | `**text**` | Bold weight |
 | Italic | `*text*` | Italic style |
+| Strikethrough | `~~text~~` | Struck-through text |
 | Inline code | `` `code` `` | Colored text |
 | Links | `[text](url)` | Underlined accent text |
+| Hard line break | Trailing `\` or two spaces | Forces a new line |
+
+### Nested Lists
+
+Indent list items by 2 spaces per level for nesting:
+
+```markdown
+- Top level
+  - Second level
+    - Third level
+```
+
+Unordered lists use distinct bullets per depth (•, ◦, ▪). Ordered lists maintain per-depth numbering.
+
+### Tables
+
+Pipe-delimited tables render with Unicode box-drawing characters:
+
+```markdown
+| Feature | Status |
+|---------|--------|
+| Tables  | Done   |
+```
+
+The separator row (`|---|---|`) is required between the header and body rows. Column widths auto-size to content and shrink proportionally when the terminal is narrow.
+
+### Alerts / Callouts
+
+GitHub-flavored alert syntax inside blockquotes:
+
+```markdown
+> [!NOTE]
+> Additional context the reader should know.
+
+> [!WARNING]
+> Something that could cause problems.
+```
+
+Supported types: `NOTE`, `TIP`, `IMPORTANT`, `WARNING`, `CAUTION`. Each type renders with a distinct icon and color.
 
 ---
 

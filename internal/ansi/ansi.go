@@ -105,12 +105,13 @@ func Truncate(s string, maxVis int) string {
 
 // Common ANSI escape codes for styling.
 const (
-	Reset     = "\x1b[0m"
-	Bold      = "\x1b[1m"
-	Dim       = "\x1b[2m"
-	Italic    = "\x1b[3m"
-	Underline = "\x1b[4m"
-	Reverse   = "\x1b[7m"
+	Reset         = "\x1b[0m"
+	Bold          = "\x1b[1m"
+	Dim           = "\x1b[2m"
+	Italic        = "\x1b[3m"
+	Underline     = "\x1b[4m"
+	Reverse       = "\x1b[7m"
+	Strikethrough = "\x1b[9m"
 
 	// Foreground colors
 	FgBlack   = "\x1b[30m"

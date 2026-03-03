@@ -694,3 +694,132 @@ More content.
 		t.Errorf("slide 4 title = %q, want %q", deck.Slides[3].Blocks[0].Raw, "Another Slide")
 	}
 }
+
+func TestNestedUnorderedList(t *testing.T) {
+	input := `- Top
+  - Middle
+    - Deep
+- Another top`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	blocks := deck.Slides[0].Blocks
+	if len(blocks) != 1 {
+		t.Fatalf("blocks = %d, want 1", len(blocks))
+	}
+	if blocks[0].Type != model.BlockUnorderedList {
+		t.Errorf("type = %v, want BlockUnorderedList", blocks[0].Type)
+	}
+	if len(blocks[0].Lines) != 4 {
+		t.Errorf("items = %d, want 4", len(blocks[0].Lines))
+	}
+	// Check depths
+	expected := []string{"0:Top", "1:Middle", "2:Deep", "0:Another top"}
+	for i, want := range expected {
+		if blocks[0].Lines[i] != want {
+			t.Errorf("item[%d] = %q, want %q", i, blocks[0].Lines[i], want)
+		}
+	}
+}
+
+func TestTaskList(t *testing.T) {
+	input := `- [x] Done item
+- [ ] Todo item
+- [X] Also done`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	blocks := deck.Slides[0].Blocks
+	if len(blocks) != 1 {
+		t.Fatalf("blocks = %d, want 1", len(blocks))
+	}
+	if blocks[0].Type != model.BlockTaskList {
+		t.Errorf("type = %v, want BlockTaskList", blocks[0].Type)
+	}
+	if len(blocks[0].Lines) != 3 {
+		t.Errorf("items = %d, want 3", len(blocks[0].Lines))
+	}
+	expected := []string{"0:1:Done item", "0:0:Todo item", "0:1:Also done"}
+	for i, want := range expected {
+		if blocks[0].Lines[i] != want {
+			t.Errorf("item[%d] = %q, want %q", i, blocks[0].Lines[i], want)
+		}
+	}
+}
+
+func TestTable(t *testing.T) {
+	input := `| Name | Value |
+|------|-------|
+| foo  | 42    |
+| bar  | 99    |`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	blocks := deck.Slides[0].Blocks
+	if len(blocks) != 1 {
+		t.Fatalf("blocks = %d, want 1", len(blocks))
+	}
+	if blocks[0].Type != model.BlockTable {
+		t.Errorf("type = %v, want BlockTable", blocks[0].Type)
+	}
+	// Separator row is skipped, so 3 lines: header + 2 data rows
+	if len(blocks[0].Lines) != 3 {
+		t.Errorf("lines = %d, want 3", len(blocks[0].Lines))
+	}
+}
+
+func TestAlert(t *testing.T) {
+	input := `> [!WARNING]
+> Be careful with this.
+> It could break things.`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	blocks := deck.Slides[0].Blocks
+	if len(blocks) != 1 {
+		t.Fatalf("blocks = %d, want 1", len(blocks))
+	}
+	if blocks[0].Type != model.BlockAlert {
+		t.Errorf("type = %v, want BlockAlert", blocks[0].Type)
+	}
+	if blocks[0].Language != "WARNING" {
+		t.Errorf("alert type = %q, want %q", blocks[0].Language, "WARNING")
+	}
+	if len(blocks[0].Lines) != 2 {
+		t.Errorf("lines = %d, want 2", len(blocks[0].Lines))
+	}
+}
+
+func TestLineBreaks(t *testing.T) {
+	input := `Line one\
+Line two`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	blocks := deck.Slides[0].Blocks
+	if len(blocks) != 1 {
+		t.Fatalf("blocks = %d, want 1", len(blocks))
+	}
+	if blocks[0].Type != model.BlockParagraph {
+		t.Errorf("type = %v, want BlockParagraph", blocks[0].Type)
+	}
+	// Should contain a newline (hard break)
+	if !strings.Contains(blocks[0].Raw, "\n") {
+		t.Errorf("raw = %q, want embedded newline", blocks[0].Raw)
+	}
+}

@@ -277,6 +277,84 @@ ratio: "50/50"
 
 Both styles coexist in the same file.
 
+## Strikethrough
+
+Use `~~text~~` to render ~~struck-through text~~.
+
+Useful for showing ~~old~~ revised wording or ~~deprecated~~ updated features.
+
+## Task Lists
+
+Track progress with checkbox lists:
+
+- [x] Implement parser
+- [x] Build renderer
+- [ ] Add syntax highlighting
+- [ ] Write documentation
+- [ ] Ship v2.0
+
+## Nested Lists
+
+Lists can be nested using indentation:
+
+- Top-level item
+  - Sub-item one
+  - Sub-item two
+    - Deep nested item
+- Another top-level
+  - With a child
+
+Ordered lists nest too:
+
+1. First step
+   1. Sub-step A
+   2. Sub-step B
+2. Second step
+   1. Another sub-step
+
+## Tables
+
+| Feature        | Status | Priority |
+|----------------|--------|----------|
+| Strikethrough  | Done   | High     |
+| Nested Lists   | Done   | Medium   |
+| Task Lists     | Done   | High     |
+| Tables         | Done   | High     |
+| Line Breaks    | Done   | Medium   |
+| Callouts       | Done   | Low      |
+
+Tables render with box-drawing characters for clean terminal display.
+
+## Line Breaks
+
+Markdown normally joins consecutive lines into one paragraph.
+
+A trailing backslash forces a\
+hard line break right here.
+
+Two trailing spaces also work  
+for hard line breaks.
+
+Without a break marker,
+these lines merge into one paragraph.
+
+## Alerts & Callouts
+
+> [!NOTE]
+> This is a note callout — useful for additional context.
+
+> [!TIP]
+> Quick tips stand out with their own icon and color.
+
+> [!WARNING]
+> Warns about potential problems or pitfalls.
+
+> [!IMPORTANT]
+> Highlights critical information the reader must know.
+
+> [!CAUTION]
+> Signals danger — something that could cause data loss or harm.
+
 # Thank You!
 
 Press `q` to quit.

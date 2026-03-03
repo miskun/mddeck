@@ -507,6 +507,22 @@ func parseBlocks(lines []string) []model.Block {
 			continue
 		}
 
+		// Task list (must be checked before unordered list)
+		if isTaskListItem(trimmed) {
+			block, end := parseTaskList(lines, i)
+			blocks = append(blocks, block)
+			i = end
+			continue
+		}
+
+		// Table (pipe-delimited)
+		if isTableLine(trimmed) {
+			block, end := parseTable(lines, i)
+			blocks = append(blocks, block)
+			i = end
+			continue
+		}
+
 		// Unordered list
 		if isUnorderedListItem(trimmed) {
 			block, end := parseUnorderedList(lines, i)
@@ -593,7 +609,7 @@ func parseHeading(line string) (model.Block, bool) {
 	}, true
 }
 
-// parseBlockquote parses a blockquote block.
+// parseBlockquote parses a blockquote or alert/callout block.
 func parseBlockquote(lines []string, i int) (model.Block, int) {
 	var quoteLines []string
 	j := i
@@ -603,17 +619,30 @@ func parseBlockquote(lines []string, i int) (model.Block, int) {
 			quoteLines = append(quoteLines, strings.TrimPrefix(trimmed, "> "))
 		} else if trimmed == ">" {
 			quoteLines = append(quoteLines, "")
-		} else if trimmed == "" {
-			// Check if next line continues the blockquote
-			if j+1 < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[j+1]), ">") {
-				quoteLines = append(quoteLines, "")
-			} else {
-				break
-			}
 		} else {
+			// Blank or non-blockquote line ends this block
 			break
 		}
 		j++
+	}
+
+	// Check if this is an alert/callout: first line matches [!TYPE]
+	if len(quoteLines) > 0 {
+		alertType := parseAlertType(quoteLines[0])
+		if alertType != "" {
+			// Remove the [!TYPE] line from content
+			contentLines := quoteLines[1:]
+			// Remove leading empty line if present
+			if len(contentLines) > 0 && contentLines[0] == "" {
+				contentLines = contentLines[1:]
+			}
+			return model.Block{
+				Type:     model.BlockAlert,
+				Raw:      alertType,
+				Lines:    contentLines,
+				Language: alertType, // store alert type in Language field
+			}, j
+		}
 	}
 
 	return model.Block{
@@ -621,6 +650,21 @@ func parseBlockquote(lines []string, i int) (model.Block, int) {
 		Raw:   strings.Join(quoteLines, "\n"),
 		Lines: quoteLines,
 	}, j
+}
+
+// parseAlertType extracts the alert type from a [!TYPE] marker.
+// Returns the type string (e.g., "NOTE", "WARNING") or "" if not an alert.
+func parseAlertType(line string) string {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "[!") || !strings.HasSuffix(line, "]") {
+		return ""
+	}
+	alertType := strings.ToUpper(line[2 : len(line)-1])
+	switch alertType {
+	case "NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION":
+		return alertType
+	}
+	return ""
 }
 
 // isUnorderedListItem checks if a line starts an unordered list.
@@ -631,27 +675,57 @@ func isUnorderedListItem(line string) bool {
 	return (line[0] == '-' || line[0] == '*') && line[1] == ' '
 }
 
-// parseUnorderedList parses an unordered list block.
+// indentedListItem checks if a line is a list item at any indentation level.
+// Returns (depth, itemText, true) if it's a list item, or (0, "", false) otherwise.
+// depth is measured in units of 2 spaces.
+func indentedListItem(line string) (int, string, bool) {
+	indent := 0
+	for _, ch := range line {
+		if ch == ' ' {
+			indent++
+		} else if ch == '\t' {
+			indent += 2
+		} else {
+			break
+		}
+	}
+	trimmed := strings.TrimLeft(line, " \t")
+	if isUnorderedListItem(trimmed) {
+		depth := indent / 2
+		return depth, trimmed[2:], true
+	}
+	return 0, "", false
+}
+
+// parseUnorderedList parses an unordered list block with nesting support.
+// Items are stored in Lines with a depth prefix: each entry is "DEPTH:text"
+// where DEPTH is a single digit (0-9).
 func parseUnorderedList(lines []string, i int) (model.Block, int) {
 	var items []string
 	j := i
 	currentItem := ""
+	currentDepth := 0
 
 	for j < len(lines) {
-		trimmed := strings.TrimSpace(lines[j])
-		if isUnorderedListItem(trimmed) {
+		line := lines[j]
+		trimmed := strings.TrimSpace(line)
+
+		if depth, text, ok := indentedListItem(line); ok {
 			if currentItem != "" {
-				items = append(items, currentItem)
+				items = append(items, fmt.Sprintf("%d:%s", currentDepth, currentItem))
 			}
-			currentItem = trimmed[2:] // skip "- " or "* "
+			currentDepth = depth
+			currentItem = text
 		} else if trimmed == "" {
 			// Check if list continues
-			if j+1 < len(lines) && isUnorderedListItem(strings.TrimSpace(lines[j+1])) {
-				j++
-				continue
+			if j+1 < len(lines) {
+				if _, _, ok := indentedListItem(lines[j+1]); ok {
+					j++
+					continue
+				}
 			}
 			break
-		} else if strings.HasPrefix(lines[j], "  ") || strings.HasPrefix(lines[j], "\t") {
+		} else if strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "\t") {
 			// Continuation of current item
 			currentItem += " " + trimmed
 		} else {
@@ -661,7 +735,7 @@ func parseUnorderedList(lines []string, i int) (model.Block, int) {
 	}
 
 	if currentItem != "" {
-		items = append(items, currentItem)
+		items = append(items, fmt.Sprintf("%d:%s", currentDepth, currentItem))
 	}
 
 	return model.Block{
@@ -685,30 +759,56 @@ func isOrderedListItem(line string) bool {
 	return false
 }
 
-// parseOrderedList parses an ordered list block.
+// indentedOrderedListItem checks if a line is an ordered list item at any indentation.
+// Returns (depth, itemText, true) if it's an ordered list item.
+func indentedOrderedListItem(line string) (int, string, bool) {
+	indent := 0
+	for _, ch := range line {
+		if ch == ' ' {
+			indent++
+		} else if ch == '\t' {
+			indent += 2
+		} else {
+			break
+		}
+	}
+	trimmed := strings.TrimLeft(line, " \t")
+	if isOrderedListItem(trimmed) {
+		depth := indent / 2
+		dotIdx := strings.Index(trimmed, ". ")
+		if dotIdx >= 0 {
+			return depth, trimmed[dotIdx+2:], true
+		}
+	}
+	return 0, "", false
+}
+
+// parseOrderedList parses an ordered list block with nesting support.
 func parseOrderedList(lines []string, i int) (model.Block, int) {
 	var items []string
 	j := i
 	currentItem := ""
+	currentDepth := 0
 
 	for j < len(lines) {
-		trimmed := strings.TrimSpace(lines[j])
-		if isOrderedListItem(trimmed) {
+		line := lines[j]
+		trimmed := strings.TrimSpace(line)
+
+		if depth, text, ok := indentedOrderedListItem(line); ok {
 			if currentItem != "" {
-				items = append(items, currentItem)
+				items = append(items, fmt.Sprintf("%d:%s", currentDepth, currentItem))
 			}
-			// Find the ". " and take text after it
-			dotIdx := strings.Index(trimmed, ". ")
-			if dotIdx >= 0 {
-				currentItem = trimmed[dotIdx+2:]
-			}
+			currentDepth = depth
+			currentItem = text
 		} else if trimmed == "" {
-			if j+1 < len(lines) && isOrderedListItem(strings.TrimSpace(lines[j+1])) {
-				j++
-				continue
+			if j+1 < len(lines) {
+				if _, _, ok := indentedOrderedListItem(lines[j+1]); ok {
+					j++
+					continue
+				}
 			}
 			break
-		} else if strings.HasPrefix(lines[j], "  ") || strings.HasPrefix(lines[j], "\t") {
+		} else if strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "\t") {
 			currentItem += " " + trimmed
 		} else {
 			break
@@ -717,11 +817,143 @@ func parseOrderedList(lines []string, i int) (model.Block, int) {
 	}
 
 	if currentItem != "" {
-		items = append(items, currentItem)
+		items = append(items, fmt.Sprintf("%d:%s", currentDepth, currentItem))
 	}
 
 	return model.Block{
 		Type:  model.BlockOrderedList,
+		Raw:   strings.Join(items, "\n"),
+		Lines: items,
+	}, j
+}
+
+// isTableLine checks if a line looks like a pipe-delimited table row.
+func isTableLine(line string) bool {
+	return strings.HasPrefix(line, "|") && strings.Contains(line[1:], "|")
+}
+
+// isTableSeparator checks if a line is a table separator (e.g., |---|---|).
+func isTableSeparator(line string) bool {
+	if !strings.HasPrefix(line, "|") {
+		return false
+	}
+	inner := strings.Trim(line, "| ")
+	// Should contain only dashes, colons, pipes, and spaces
+	for _, ch := range inner {
+		if ch != '-' && ch != ':' && ch != '|' && ch != ' ' {
+			return false
+		}
+	}
+	return strings.Contains(inner, "-")
+}
+
+// parseTableRow splits a pipe-delimited row into cells.
+func parseTableRow(line string) []string {
+	// Trim leading/trailing pipes
+	line = strings.TrimSpace(line)
+	if strings.HasPrefix(line, "|") {
+		line = line[1:]
+	}
+	if strings.HasSuffix(line, "|") {
+		line = line[:len(line)-1]
+	}
+	cells := strings.Split(line, "|")
+	for i := range cells {
+		cells[i] = strings.TrimSpace(cells[i])
+	}
+	return cells
+}
+
+// parseTable parses a pipe-delimited table block.
+// Lines[0] = header row, Lines[1:] = data rows. Each line is pipe-separated.
+// The separator row (|---|---|) is detected and skipped.
+func parseTable(lines []string, i int) (model.Block, int) {
+	var tableLines []string
+	j := i
+
+	for j < len(lines) {
+		trimmed := strings.TrimSpace(lines[j])
+		if !isTableLine(trimmed) {
+			break
+		}
+		// Skip separator rows (they're just formatting hints)
+		if !isTableSeparator(trimmed) {
+			tableLines = append(tableLines, trimmed)
+		}
+		j++
+	}
+
+	return model.Block{
+		Type:  model.BlockTable,
+		Raw:   strings.Join(tableLines, "\n"),
+		Lines: tableLines,
+	}, j
+}
+
+// isTaskListItem checks if a line is a task list item (- [ ] or - [x]).
+func isTaskListItem(line string) bool {
+	return strings.HasPrefix(line, "- [ ] ") || strings.HasPrefix(line, "- [x] ") ||
+		strings.HasPrefix(line, "- [X] ") || line == "- [ ]" || line == "- [x]" || line == "- [X]"
+}
+
+// indentedTaskListItem checks if a line is a task list item at any indentation.
+func indentedTaskListItem(line string) (int, bool, string, bool) {
+	indent := 0
+	for _, ch := range line {
+		if ch == ' ' {
+			indent++
+		} else if ch == '\t' {
+			indent += 2
+		} else {
+			break
+		}
+	}
+	trimmed := strings.TrimLeft(line, " \t")
+	if isTaskListItem(trimmed) {
+		depth := indent / 2
+		checked := strings.HasPrefix(trimmed, "- [x]") || strings.HasPrefix(trimmed, "- [X]")
+		text := ""
+		if len(trimmed) > 6 {
+			text = trimmed[6:]
+		}
+		return depth, checked, text, true
+	}
+	return 0, false, "", false
+}
+
+// parseTaskList parses a task list block.
+// Items in Lines are stored as "DEPTH:C:text" where C is 1 (checked) or 0 (unchecked).
+func parseTaskList(lines []string, i int) (model.Block, int) {
+	var items []string
+	j := i
+
+	for j < len(lines) {
+		line := lines[j]
+		trimmed := strings.TrimSpace(line)
+
+		if depth, checked, text, ok := indentedTaskListItem(line); ok {
+			c := "0"
+			if checked {
+				c = "1"
+			}
+			items = append(items, fmt.Sprintf("%d:%s:%s", depth, c, text))
+		} else if trimmed == "" {
+			// Check if list continues
+			if j+1 < len(lines) {
+				if _, _, _, ok := indentedTaskListItem(lines[j+1]); ok {
+					j++
+					continue
+				}
+			}
+			break
+		} else {
+			break
+		}
+		j++
+	}
+
+	return model.Block{
+		Type:  model.BlockTaskList,
 		Raw:   strings.Join(items, "\n"),
 		Lines: items,
 	}, j
@@ -744,6 +976,8 @@ func parseParagraph(lines []string, i int) (model.Block, int) {
 			trimmed == ">" ||
 			isUnorderedListItem(trimmed) ||
 			isOrderedListItem(trimmed) ||
+			isTaskListItem(trimmed) ||
+			isTableLine(trimmed) ||
 			trimmed == "---" || trimmed == "***" || trimmed == "___" ||
 			trimmed == "???" {
 			break
@@ -754,6 +988,43 @@ func parseParagraph(lines []string, i int) (model.Block, int) {
 
 	return model.Block{
 		Type: model.BlockParagraph,
-		Raw:  strings.Join(paraLines, " "),
+		Raw:  joinParagraphLines(paraLines),
 	}, j
+}
+
+// joinParagraphLines joins paragraph lines, preserving hard line breaks.
+// A trailing backslash (\) or two trailing spaces indicate a hard break,
+// which is preserved as a newline in the raw text.
+func joinParagraphLines(lines []string) string {
+	if len(lines) == 0 {
+		return ""
+	}
+	var result strings.Builder
+	for i, line := range lines {
+		if i > 0 {
+			// Check if previous line ended with a hard break
+			prev := lines[i-1]
+			if strings.HasSuffix(prev, "\\") || strings.HasSuffix(prev, "  ") {
+				// Already added newline below
+			} else {
+				result.WriteByte(' ')
+			}
+		}
+		// Strip trailing backslash (the break marker)
+		if strings.HasSuffix(line, "\\") {
+			result.WriteString(strings.TrimSuffix(line, "\\"))
+			if i < len(lines)-1 {
+				result.WriteByte('\n')
+			}
+		} else if strings.HasSuffix(line, "  ") {
+			// Two trailing spaces = hard break
+			result.WriteString(strings.TrimRight(line, " "))
+			if i < len(lines)-1 {
+				result.WriteByte('\n')
+			}
+		} else {
+			result.WriteString(line)
+		}
+	}
+	return result.String()
 }

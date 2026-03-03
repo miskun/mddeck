@@ -203,6 +203,12 @@ func (r *Renderer) renderBlock(block model.Block, width int) []string {
 		return r.renderOrderedList(block, width)
 	case model.BlockBlockquote:
 		return r.renderBlockquote(block, width)
+	case model.BlockAlert:
+		return r.renderAlert(block, width)
+	case model.BlockTaskList:
+		return r.renderTaskList(block, width)
+	case model.BlockTable:
+		return r.renderTable(block, width)
 	case model.BlockFencedCode:
 		return r.renderCode(block, width)
 	case model.BlockANSIArt, model.BlockASCIIArt, model.BlockBrailleArt:
@@ -236,53 +242,84 @@ func (r *Renderer) renderHeading(block model.Block, width int) []string {
 }
 
 // renderParagraph renders a paragraph with optional wrapping.
+// Embedded newlines (from hard line breaks: trailing \ or two spaces) are preserved.
 func (r *Renderer) renderParagraph(block model.Block, width int) []string {
-	if r.Wrap && width > 0 {
-		// Wrap raw text first, then apply inline styles to each line.
-		// This prevents wrapText from stripping ANSI codes.
-		wrapped := wrapText(block.Raw, width)
-		for i, line := range wrapped {
-			wrapped[i] = r.applyInlineStyles(line)
-		}
-		return wrapped
-	}
-	return []string{r.applyInlineStyles(block.Raw)}
-}
-
-// renderUnorderedList renders an unordered list.
-func (r *Renderer) renderUnorderedList(block model.Block, width int) []string {
+	// Split on embedded newlines first (from hard line breaks)
+	segments := strings.Split(block.Raw, "\n")
 	var lines []string
-	bullet := r.Theme.Accent + r.Theme.BulletChar + a.Reset
 
-	for _, item := range block.Lines {
-		if r.Wrap && width > 4 {
-			wrapped := wrapText(item, width-4)
-			for j, wl := range wrapped {
-				styled := r.applyInlineStyles(wl)
-				if j == 0 {
-					lines = append(lines, "  "+bullet+styled)
-				} else {
-					lines = append(lines, "    "+styled)
-				}
+	for _, seg := range segments {
+		if r.Wrap && width > 0 {
+			wrapped := wrapText(seg, width)
+			for _, wl := range wrapped {
+				lines = append(lines, r.applyInlineStyles(wl))
 			}
 		} else {
-			lines = append(lines, "  "+bullet+r.applyInlineStyles(item))
+			lines = append(lines, r.applyInlineStyles(seg))
 		}
 	}
 	return lines
 }
 
-// renderOrderedList renders an ordered list.
-func (r *Renderer) renderOrderedList(block model.Block, width int) []string {
-	var lines []string
+// parseListItem extracts the depth and text from a depth-prefixed list item.
+// Items are stored as "DEPTH:text" where DEPTH is a digit.
+func parseListItem(item string) (int, string) {
+	if len(item) >= 2 && item[0] >= '0' && item[0] <= '9' && item[1] == ':' {
+		return int(item[0] - '0'), item[2:]
+	}
+	return 0, item
+}
 
-	for i, item := range block.Lines {
-		num := fmt.Sprintf("%s%d.%s ", r.Theme.Accent, i+1, a.Reset)
-		prefix := "  " + num
-		prefixWidth := 5 // "  N. "
+// renderUnorderedList renders an unordered list with nesting support.
+func (r *Renderer) renderUnorderedList(block model.Block, width int) []string {
+	var lines []string
+	bullets := []string{"• ", "◦ ", "▪ "} // different bullets per depth
+
+	for _, item := range block.Lines {
+		depth, text := parseListItem(item)
+		indent := strings.Repeat("  ", depth+1) // base indent + nesting
+		bulletIdx := depth % len(bullets)
+		bullet := r.Theme.Accent + bullets[bulletIdx] + a.Reset
+		prefixWidth := 2*(depth+1) + 2 // indentation + bullet
 
 		if r.Wrap && width > prefixWidth {
-			wrapped := wrapText(item, width-prefixWidth)
+			wrapped := wrapText(text, width-prefixWidth)
+			for j, wl := range wrapped {
+				styled := r.applyInlineStyles(wl)
+				if j == 0 {
+					lines = append(lines, indent+bullet+styled)
+				} else {
+					lines = append(lines, indent+"  "+styled)
+				}
+			}
+		} else {
+			lines = append(lines, indent+bullet+r.applyInlineStyles(text))
+		}
+	}
+	return lines
+}
+
+// renderOrderedList renders an ordered list with nesting support.
+func (r *Renderer) renderOrderedList(block model.Block, width int) []string {
+	var lines []string
+	// Track per-depth counters for ordering
+	counters := make(map[int]int)
+
+	for _, item := range block.Lines {
+		depth, text := parseListItem(item)
+		counters[depth]++
+		// Reset deeper counters when we go back up
+		for d := depth + 1; d <= 9; d++ {
+			delete(counters, d)
+		}
+
+		indent := strings.Repeat("  ", depth+1)
+		num := fmt.Sprintf("%s%d.%s ", r.Theme.Accent, counters[depth], a.Reset)
+		prefix := indent + num
+		prefixWidth := 2*(depth+1) + 3 // indentation + "N. "
+
+		if r.Wrap && width > prefixWidth {
+			wrapped := wrapText(text, width-prefixWidth)
 			for j, wl := range wrapped {
 				styled := r.applyInlineStyles(wl)
 				if j == 0 {
@@ -292,7 +329,7 @@ func (r *Renderer) renderOrderedList(block model.Block, width int) []string {
 				}
 			}
 		} else {
-			lines = append(lines, prefix+r.applyInlineStyles(item))
+			lines = append(lines, prefix+r.applyInlineStyles(text))
 		}
 	}
 	return lines
@@ -308,6 +345,228 @@ func (r *Renderer) renderBlockquote(block model.Block, width int) []string {
 		styled := indicator + text + a.Reset
 		lines = append(lines, styled)
 	}
+	return lines
+}
+
+// alertStyle returns the icon and color for an alert type.
+func (r *Renderer) alertStyle(alertType string) (string, string) {
+	switch alertType {
+	case "NOTE":
+		return "▪", a.FgBrightBlue
+	case "TIP":
+		return "▪", a.FgBrightGreen
+	case "IMPORTANT":
+		return "▪", a.FgBrightMagenta
+	case "WARNING":
+		return "▪", a.FgBrightYellow
+	case "CAUTION":
+		return "▪", a.FgBrightRed
+	default:
+		return "ℹ", r.Theme.Accent
+	}
+}
+
+// renderAlert renders an alert/callout block with styled prefix.
+func (r *Renderer) renderAlert(block model.Block, width int) []string {
+	var lines []string
+	icon, color := r.alertStyle(block.Language)
+
+	// Title line
+	title := color + a.Bold + icon + " " + block.Language + a.Reset
+	bar := color + "│ " + a.Reset
+
+	lines = append(lines, bar+title)
+
+	for _, line := range block.Lines {
+		if line == "" {
+			lines = append(lines, bar)
+		} else {
+			text := r.applyInlineStyles(line)
+			lines = append(lines, bar+text)
+		}
+	}
+	return lines
+}
+
+// parseTaskItem extracts depth, checked state, and text from a task list item.
+// Items are stored as "DEPTH:C:text" where C is 1 (checked) or 0 (unchecked).
+func parseTaskItem(item string) (int, bool, string) {
+	if len(item) >= 4 && item[0] >= '0' && item[0] <= '9' && item[1] == ':' && item[3] == ':' {
+		depth := int(item[0] - '0')
+		checked := item[2] == '1'
+		return depth, checked, item[4:]
+	}
+	return 0, false, item
+}
+
+// renderTaskList renders a task list with checkboxes.
+func (r *Renderer) renderTaskList(block model.Block, width int) []string {
+	var lines []string
+
+	for _, item := range block.Lines {
+		depth, checked, text := parseTaskItem(item)
+		indent := strings.Repeat("  ", depth+1)
+
+		var checkbox string
+		if checked {
+			checkbox = r.Theme.Accent + "☑" + a.Reset + " "
+		} else {
+			checkbox = r.Theme.Muted + "☐" + a.Reset + " "
+		}
+
+		prefixWidth := 2*(depth+1) + 2 // indent + checkbox
+
+		if r.Wrap && width > prefixWidth {
+			wrapped := wrapText(text, width-prefixWidth)
+			for j, wl := range wrapped {
+				styled := r.applyInlineStyles(wl)
+				if j == 0 {
+					lines = append(lines, indent+checkbox+styled)
+				} else {
+					lines = append(lines, strings.Repeat(" ", prefixWidth)+styled)
+				}
+			}
+		} else {
+			lines = append(lines, indent+checkbox+r.applyInlineStyles(text))
+		}
+	}
+	return lines
+}
+
+// splitTableRow splits a pipe-delimited table line into cells.
+func splitTableRow(line string) []string {
+	line = strings.TrimSpace(line)
+	if strings.HasPrefix(line, "|") {
+		line = line[1:]
+	}
+	if strings.HasSuffix(line, "|") {
+		line = line[:len(line)-1]
+	}
+	cells := strings.Split(line, "|")
+	for i := range cells {
+		cells[i] = strings.TrimSpace(cells[i])
+	}
+	return cells
+}
+
+// renderTable renders a pipe-delimited table with box-drawing characters.
+func (r *Renderer) renderTable(block model.Block, width int) []string {
+	if len(block.Lines) == 0 {
+		return nil
+	}
+
+	// Parse all rows into cells
+	var rows [][]string
+	maxCols := 0
+	for _, line := range block.Lines {
+		cells := splitTableRow(line)
+		rows = append(rows, cells)
+		if len(cells) > maxCols {
+			maxCols = len(cells)
+		}
+	}
+
+	// Normalize: pad rows with fewer cells
+	for i := range rows {
+		for len(rows[i]) < maxCols {
+			rows[i] = append(rows[i], "")
+		}
+	}
+
+	// Calculate column widths (visible length of content)
+	colWidths := make([]int, maxCols)
+	for _, row := range rows {
+		for c, cell := range row {
+			cl := utf8.RuneCountInString(cell)
+			if cl > colWidths[c] {
+				colWidths[c] = cl
+			}
+		}
+	}
+
+	// Cap total width to available space
+	totalWidth := maxCols + 1 // pipes
+	for _, w := range colWidths {
+		totalWidth += w + 2 // padding
+	}
+	if totalWidth > width && width > maxCols*3+maxCols+1 {
+		// Shrink proportionally
+		available := width - maxCols - 1 - maxCols*2
+		if available < maxCols {
+			available = maxCols
+		}
+		total := 0
+		for _, w := range colWidths {
+			total += w
+		}
+		if total > 0 {
+			for c := range colWidths {
+				colWidths[c] = colWidths[c] * available / total
+				if colWidths[c] < 1 {
+					colWidths[c] = 1
+				}
+			}
+		}
+	}
+
+	var lines []string
+
+	// Top border: ┌──┬──┐
+	top := r.Theme.Muted + "┌"
+	for c, w := range colWidths {
+		top += strings.Repeat("─", w+2)
+		if c < maxCols-1 {
+			top += "┬"
+		}
+	}
+	top += "┐" + a.Reset
+	lines = append(lines, top)
+
+	for ri, row := range rows {
+		// Data row: │ cell │ cell │
+		line := r.Theme.Muted + "│" + a.Reset
+		for c, cell := range row {
+			// Truncate cell if needed
+			cellRunes := []rune(cell)
+			if len(cellRunes) > colWidths[c] {
+				cellRunes = cellRunes[:colWidths[c]]
+			}
+			padded := string(cellRunes) + strings.Repeat(" ", colWidths[c]-len(cellRunes))
+
+			if ri == 0 {
+				// Header row: bold
+				line += " " + a.Bold + r.applyInlineStyles(padded) + a.Reset + " " + r.Theme.Muted + "│" + a.Reset
+			} else {
+				line += " " + r.applyInlineStyles(padded) + " " + r.Theme.Muted + "│" + a.Reset
+			}
+		}
+		lines = append(lines, line)
+
+		// After header row: separator ├──┼──┤
+		if ri == 0 {
+			sep := r.Theme.Muted + "├"
+			for c, w := range colWidths {
+				sep += strings.Repeat("─", w+2)
+				if c < maxCols-1 {
+					sep += "┼"
+				}
+			}
+			sep += "┤" + a.Reset
+			lines = append(lines, sep)
+		}
+	}
+
+	// Bottom border: └──┴──┘
+	bottom := r.Theme.Muted + "└"
+	for c, w := range colWidths {
+		bottom += strings.Repeat("─", w+2)
+		if c < maxCols-1 {
+			bottom += "┴"
+		}
+	}
+	bottom += "┘" + a.Reset
+	lines = append(lines, bottom)
+
 	return lines
 }
 
@@ -345,10 +604,11 @@ func (r *Renderer) renderHR(width int) []string {
 
 // Inline style patterns
 var (
-	boldRegex   = regexp.MustCompile(`\*\*(.+?)\*\*`)
-	italicRegex = regexp.MustCompile(`\*(.+?)\*`)
-	codeRegex   = regexp.MustCompile("`([^`]+)`")
-	linkRegex   = regexp.MustCompile(`\[([^\]]+)\]\([^\)]+\)`)
+	boldRegex          = regexp.MustCompile(`\*\*(.+?)\*\*`)
+	italicRegex        = regexp.MustCompile(`\*(.+?)\*`)
+	codeRegex          = regexp.MustCompile("`([^`]+)`")
+	strikethroughRegex = regexp.MustCompile(`~~(.+?)~~`)
+	linkRegex          = regexp.MustCompile(`\[([^\]]+)\]\([^\)]+\)`)
 )
 
 // applyInlineStyles applies bold, italic, code, and link styles.
@@ -357,6 +617,8 @@ func (r *Renderer) applyInlineStyles(text string) string {
 	text = boldRegex.ReplaceAllString(text, a.Bold+"$1"+a.Reset+r.Theme.Fg)
 	// Italic (must come after bold to avoid conflicts)
 	text = italicRegex.ReplaceAllString(text, a.Italic+"$1"+a.Reset+r.Theme.Fg)
+	// Strikethrough
+	text = strikethroughRegex.ReplaceAllString(text, a.Strikethrough+"$1"+a.Reset+r.Theme.Fg)
 	// Inline code
 	text = codeRegex.ReplaceAllString(text, r.Theme.CodeFg+"$1"+a.Reset+r.Theme.Fg)
 	// Links (render as styled text)
