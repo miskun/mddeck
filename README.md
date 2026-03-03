@@ -7,13 +7,13 @@ mddeck renders presentations directly in your terminal using character cells and
 ## Install
 
 ```bash
-go install github.com/miska/mddeck/cmd/mddeck@latest
+go install github.com/miskun/mddeck/cmd/mddeck@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/miska/mddeck.git
+git clone https://github.com/miskun/mddeck.git
 cd mddeck
 go build -o mddeck ./cmd/mddeck/
 ```
