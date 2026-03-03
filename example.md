@@ -1,5 +1,8 @@
 ---
 title: "Markdown in mddeck"
+footer:
+  left: "mddeck"
+  center: "Feature Tour"
 ---
 
 # Markdown in mddeck

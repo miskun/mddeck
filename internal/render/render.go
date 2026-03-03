@@ -53,14 +53,46 @@ func (r *Renderer) RenderSlide(slide *model.Slide, vp layout.Viewport) []string 
 		}
 	}
 
-	// Status bar: place into screen buffer so it's part of the line diff
+	// Footer bar: left | center | right across the bottom row
 	total := len(r.Deck.Slides)
-	status := fmt.Sprintf(" %d / %d ", slide.Index+1, total)
-	statusCol := vp.Width - len(status)
-	if statusCol < 0 {
-		statusCol = 0
+	footer := r.Deck.Meta.Footer
+
+	// Right section: custom text or default slide counter
+	rightText := footer.Right
+	if rightText == "" {
+		rightText = fmt.Sprintf(" %d / %d ", slide.Index+1, total)
 	}
-	scr.Set(vp.Height-1, statusCol, r.Theme.SlideNumStyle+status+a.Reset)
+
+	// Left section
+	leftText := footer.Left
+
+	// Center section
+	centerText := footer.Center
+
+	style := r.Theme.SlideNumStyle
+
+	// Place left-aligned text
+	if leftText != "" {
+		padded := " " + leftText + " "
+		scr.Set(vp.Height-1, 0, style+padded+a.Reset)
+	}
+
+	// Place center-aligned text
+	if centerText != "" {
+		padded := " " + centerText + " "
+		centerCol := (vp.Width - len(padded)) / 2
+		if centerCol < 0 {
+			centerCol = 0
+		}
+		scr.Set(vp.Height-1, centerCol, style+padded+a.Reset)
+	}
+
+	// Place right-aligned text
+	rightCol := vp.Width - len(rightText)
+	if rightCol < 0 {
+		rightCol = 0
+	}
+	scr.Set(vp.Height-1, rightCol, style+rightText+a.Reset)
 
 	return scr.Lines()
 }

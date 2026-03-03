@@ -37,6 +37,16 @@ type DeckMeta struct {
 	MaxHeight int                      `yaml:"maxHeight"`
 	SafeAnsi  *bool                    `yaml:"safeAnsi"`  // pointer so we can detect unset vs false
 	Layouts   map[string]CustomLayout  `yaml:"layouts"`   // user-defined or overridden layouts
+	Footer    Footer                   `yaml:"footer"`    // configurable footer sections
+}
+
+// Footer defines the three sections of the slide footer bar.
+// Left and Center are static text from frontmatter.
+// Right defaults to the slide counter ("N / M") if not set.
+type Footer struct {
+	Left   string `yaml:"left"`
+	Center string `yaml:"center"`
+	Right  string `yaml:"right"`
 }
 
 // CustomLayout defines a user-configurable grid layout.
