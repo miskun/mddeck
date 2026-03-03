@@ -107,6 +107,10 @@ func (rt *Runtime) Run() error {
 	rt.running = true
 	rt.render()
 
+	// Create a ticker for real-time timer updates in presenter mode
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
 	// Read input in a goroutine so we can also receive resize events
 	inputCh := make(chan []byte, 1)
 	go func() {
@@ -151,6 +155,11 @@ func (rt *Runtime) Run() error {
 		case <-resizeTimerCh:
 			resizeTimerCh = make(<-chan time.Time) // disarm
 			rt.render()
+		case <-ticker.C:
+			// Update display for real-time timer in presenter mode
+			if rt.mode == ModePresenter {
+				rt.render()
+			}
 		}
 	}
 
