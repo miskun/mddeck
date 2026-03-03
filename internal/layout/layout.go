@@ -45,7 +45,7 @@ func builtinLayouts() map[string]model.CustomLayout {
 			PadY:    intPtr(0),
 		},
 		"two-col": {
-			Columns: []int{62, 38},
+			Columns: []int{50, 50},
 			PadY:    intPtr(1),
 		},
 		"split": {

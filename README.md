@@ -406,7 +406,7 @@ All built-in layouts use the same defaults: horizontal padding from aspect ratio
 | `default` | 1×1 | Standard single-region, top-aligned |
 | `title` | 1×1 | Centered title slide (large heading) |
 | `center` | 1×1 | Content centered vertically and horizontally |
-| `two-col` | 2×1 (62/38) | Two columns |
+| `two-col` | 2×1 (50/50) | Two columns |
 | `split` | 1×2 (60/40) | Top/bottom split |
 | `terminal` | 1×1 | Single region for code/art |
 | `sidebar` | 2×1 (30/70) | Narrow left panel, wide right panel |
@@ -426,7 +426,7 @@ When `layout: auto` (the default), the layout is chosen as follows:
 
 ### Two-Column Ratio
 
-The `two-col` layout defaults to a 62/38 column split. Override per slide:
+The `two-col` layout defaults to a 50/50 column split. Override per slide:
 
 ```yaml
 ---
@@ -605,7 +605,7 @@ Override via CLI (`--theme dark`) or deck frontmatter (`theme: "dark"`).
 |-----------|----------|
 | YAML parse error | Exit non-zero with message |
 | Unknown YAML keys | Silently ignored |
-| Invalid `ratio` | Fallback to default (62/38) |
+| Invalid `ratio` | Fallback to default (50/50) |
 | Invalid UTF-8 | Replaced with `�` |
 
 ---

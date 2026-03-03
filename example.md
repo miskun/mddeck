@@ -163,72 +163,6 @@ A paragraph with **bold text**, *italic text*, `code spans`, and [links](https:/
 
 > A blockquote with **bold**, *italic*, and `code` inside.
 
----
-layout: two-col
-ratio: "50/50"
----
-
-## Two-Column Layout
-
-This content appears in the left column. Use slide frontmatter to set `layout: two-col`.
-
-- Left point A
-- Left point B
-- Left point C
-
-## Right Side
-
-This content appears in the right column. Set custom ratios with `ratio: "50/50"`.
-
-- Right point 1
-- Right point 2
-- Right point 3
-
----
-layout: two-col
-ratio: "70/30"
----
-
-## Code Example
-
-The `ratio` field controls column widths. This slide uses `70/30`.
-
-```go
-func render(slide Slide) string {
-    buf := newScreenBuf(w, h)
-    for _, block := range slide.Blocks {
-        buf.Set(row, col, block)
-    }
-    return buf.String()
-}
-```
-
-## Notes
-
-- 70/30 ratio
-- Code on the left
-- Notes on the right
-
----
-layout: terminal
----
-
-## Terminal Layout
-
-```
-$ mddeck --present slides.md
-╭─────────────────────────────────────────╮
-│  Welcome to mddeck                      │
-│                                          │
-│  Terminal-native presentations,          │
-│  powered by Markdown.                    │
-│                                          │
-│                               1 / 7      │
-╰─────────────────────────────────────────╯
-```
-
-Full viewport width — ideal for code and art.
-
 ## Strikethrough
 
 Use `~~text~~` to render ~~struck-through text~~.
@@ -355,6 +289,76 @@ ratio: "50/50"
 ```
 
 Both styles coexist in the same file.
+
+# Layouts
+
+A tour of built-in layouts, one slide at a time.
+
+---
+layout: two-col
+ratio: "50/50"
+---
+
+## Two-Column Layout
+
+This content appears in the left column. Use slide frontmatter to set `layout: two-col`.
+
+- Left point A
+- Left point B
+- Left point C
+
+## Right Side
+
+This content appears in the right column. Set custom ratios with `ratio: "50/50"`.
+
+- Right point 1
+- Right point 2
+- Right point 3
+
+---
+layout: two-col
+ratio: "70/30"
+---
+
+## Code Example
+
+The `ratio` field controls column widths. This slide uses `70/30`.
+
+```go
+func render(slide Slide) string {
+    buf := newScreenBuf(w, h)
+    for _, block := range slide.Blocks {
+        buf.Set(row, col, block)
+    }
+    return buf.String()
+}
+```
+
+## Notes
+
+- 70/30 ratio
+- Code on the left
+- Notes on the right
+
+---
+layout: terminal
+---
+
+## Terminal Layout
+
+```
+$ mddeck --present slides.md
+╭─────────────────────────────────────────╮
+│  Welcome to mddeck                      │
+│                                          │
+│  Terminal-native presentations,          │
+│  powered by Markdown.                    │
+│                                          │
+│                               1 / 7      │
+╰─────────────────────────────────────────╯
+```
+
+Full viewport width — ideal for code and art.
 
 ---
 layout: sidebar
