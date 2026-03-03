@@ -417,7 +417,7 @@ func SplitBlocksIntoMajor(blocks []model.Block) []model.MajorBlock {
 	var current *model.MajorBlock
 
 	for _, b := range blocks {
-		if b.Type == model.BlockHeading && b.Level <= 2 {
+		if b.Type == model.BlockHeading {
 			if current != nil {
 				majors = append(majors, *current)
 			}

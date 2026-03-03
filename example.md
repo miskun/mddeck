@@ -1,5 +1,6 @@
 ---
 title: "Markdown in mddeck"
+theme: "dark"
 footer:
   left: "mddeck"
   center: "Feature Tour"

@@ -830,9 +830,39 @@ func TestTable(t *testing.T) {
 	if blocks[0].Type != model.BlockTable {
 		t.Errorf("type = %v, want BlockTable", blocks[0].Type)
 	}
-	// Separator row is skipped, so 3 lines: header + 2 data rows
+	// Header separator is skipped, so 3 lines: header + 2 data rows
 	if len(blocks[0].Lines) != 3 {
 		t.Errorf("lines = %d, want 3", len(blocks[0].Lines))
+	}
+}
+
+func TestTableMidSeparator(t *testing.T) {
+	input := `| Name | Role |
+|------|------|
+| Alice| Dev  |
+| Bob  | QA   |
+|------|------|
+| Carol| PM   |`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	blocks := deck.Slides[0].Blocks
+	if len(blocks) != 1 {
+		t.Fatalf("blocks = %d, want 1", len(blocks))
+	}
+	if blocks[0].Type != model.BlockTable {
+		t.Errorf("type = %v, want BlockTable", blocks[0].Type)
+	}
+	// Header + 2 data + mid-separator + 1 data = 5 lines
+	if len(blocks[0].Lines) != 5 {
+		t.Errorf("lines = %d, want 5", len(blocks[0].Lines))
+	}
+	// The mid-table separator should be the 4th line (index 3)
+	if blocks[0].Lines[3] != "|------|------|" {
+		t.Errorf("line[3] = %q, want separator row", blocks[0].Lines[3])
 	}
 }
 

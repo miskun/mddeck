@@ -372,11 +372,20 @@ func (r *Renderer) renderOrderedList(block model.Block, width int) []string {
 func (r *Renderer) renderBlockquote(block model.Block, width int) []string {
 	var lines []string
 	indicator := r.Theme.Muted + r.Theme.BlockquoteChar
+	// Account for indicator width when wrapping
+	contentWidth := width - 2 // "│ " is 2 chars
 
 	for _, line := range block.Lines {
-		text := r.applyInlineStyles(line)
-		styled := indicator + text + a.Reset
-		lines = append(lines, styled)
+		if r.Wrap && contentWidth > 0 {
+			wrapped := wrapText(line, contentWidth)
+			for _, wl := range wrapped {
+				text := r.applyInlineStyles(wl)
+				lines = append(lines, indicator+text+a.Reset)
+			}
+		} else {
+			text := r.applyInlineStyles(line)
+			lines = append(lines, indicator+text+a.Reset)
+		}
 	}
 	return lines
 }
@@ -410,9 +419,18 @@ func (r *Renderer) renderAlert(block model.Block, width int) []string {
 
 	lines = append(lines, bar+title)
 
+	// Account for bar width when wrapping
+	contentWidth := width - 2 // "│ " is 2 chars
+
 	for _, line := range block.Lines {
 		if line == "" {
 			lines = append(lines, bar)
+		} else if r.Wrap && contentWidth > 0 {
+			wrapped := wrapText(line, contentWidth)
+			for _, wl := range wrapped {
+				text := r.applyInlineStyles(wl)
+				lines = append(lines, bar+text)
+			}
 		} else {
 			text := r.applyInlineStyles(line)
 			lines = append(lines, bar+text)
@@ -483,34 +501,51 @@ func splitTableRow(line string) []string {
 }
 
 // renderTable renders a pipe-delimited table with box-drawing characters.
+// Mid-table separator rows (preserved by the parser) are rendered as ├──┼──┤ borders.
 func (r *Renderer) renderTable(block model.Block, width int) []string {
 	if len(block.Lines) == 0 {
 		return nil
 	}
 
-	// Parse all rows into cells
-	var rows [][]string
+	// Classify each line as separator or data
+	type entry struct {
+		isSep bool
+		cells []string
+	}
+	var entries []entry
 	maxCols := 0
 	for _, line := range block.Lines {
-		cells := splitTableRow(line)
-		rows = append(rows, cells)
-		if len(cells) > maxCols {
-			maxCols = len(cells)
+		if isRendererTableSeparator(line) {
+			entries = append(entries, entry{isSep: true})
+		} else {
+			cells := splitTableRow(line)
+			entries = append(entries, entry{cells: cells})
+			if len(cells) > maxCols {
+				maxCols = len(cells)
+			}
 		}
 	}
 
-	// Normalize: pad rows with fewer cells
-	for i := range rows {
-		for len(rows[i]) < maxCols {
-			rows[i] = append(rows[i], "")
+	// Normalize: pad data rows with fewer cells
+	for i := range entries {
+		if !entries[i].isSep {
+			for len(entries[i].cells) < maxCols {
+				entries[i].cells = append(entries[i].cells, "")
+			}
 		}
 	}
 
-	// Calculate column widths (visible length of content)
+	// Calculate column widths based on visible content length (data rows only).
+	// Inline markdown markers (**bold**, *italic*, etc.) are stripped
+	// so that column widths reflect what the user actually sees.
 	colWidths := make([]int, maxCols)
-	for _, row := range rows {
-		for c, cell := range row {
-			cl := utf8.RuneCountInString(cell)
+	for _, e := range entries {
+		if e.isSep {
+			continue
+		}
+		for c, cell := range e.cells {
+			visible := stripInlineMarkdown(cell)
+			cl := utf8.RuneCountInString(visible)
 			if cl > colWidths[c] {
 				colWidths[c] = cl
 			}
@@ -543,64 +578,78 @@ func (r *Renderer) renderTable(block model.Block, width int) []string {
 	}
 
 	var lines []string
+	isFirstDataRow := true
 
 	// Top border: ┌──┬──┐
-	top := r.Theme.Muted + "┌"
-	for c, w := range colWidths {
-		top += strings.Repeat("─", w+2)
-		if c < maxCols-1 {
-			top += "┬"
-		}
-	}
-	top += "┐" + a.Reset
-	lines = append(lines, top)
+	lines = append(lines, r.tableHLine("┌", "┬", "┐", colWidths, maxCols))
 
-	for ri, row := range rows {
+	for _, e := range entries {
+		if e.isSep {
+			// Mid-table separator: ├──┼──┤
+			lines = append(lines, r.tableHLine("├", "┼", "┤", colWidths, maxCols))
+			continue
+		}
+
 		// Data row: │ cell │ cell │
 		line := r.Theme.Muted + "│" + a.Reset
-		for c, cell := range row {
-			// Truncate cell if needed
-			cellRunes := []rune(cell)
-			if len(cellRunes) > colWidths[c] {
-				cellRunes = cellRunes[:colWidths[c]]
+		for c, cell := range e.cells {
+			// Compute visible length and truncate if needed
+			styled := r.applyInlineStyles(cell)
+			visLen := a.VisibleLen(styled)
+			if visLen > colWidths[c] {
+				styled = a.Truncate(styled, colWidths[c])
+				visLen = colWidths[c]
 			}
-			padded := string(cellRunes) + strings.Repeat(" ", colWidths[c]-len(cellRunes))
+			pad := strings.Repeat(" ", colWidths[c]-visLen)
 
-			if ri == 0 {
+			if isFirstDataRow {
 				// Header row: bold
-				line += " " + a.Bold + r.applyInlineStyles(padded) + a.Reset + " " + r.Theme.Muted + "│" + a.Reset
+				line += " " + a.Bold + styled + a.Reset + pad + " " + r.Theme.Muted + "│" + a.Reset
 			} else {
-				line += " " + r.applyInlineStyles(padded) + " " + r.Theme.Muted + "│" + a.Reset
+				line += " " + styled + pad + " " + r.Theme.Muted + "│" + a.Reset
 			}
 		}
 		lines = append(lines, line)
 
 		// After header row: separator ├──┼──┤
-		if ri == 0 {
-			sep := r.Theme.Muted + "├"
-			for c, w := range colWidths {
-				sep += strings.Repeat("─", w+2)
-				if c < maxCols-1 {
-					sep += "┼"
-				}
-			}
-			sep += "┤" + a.Reset
-			lines = append(lines, sep)
+		if isFirstDataRow {
+			lines = append(lines, r.tableHLine("├", "┼", "┤", colWidths, maxCols))
+			isFirstDataRow = false
 		}
 	}
 
 	// Bottom border: └──┴──┘
-	bottom := r.Theme.Muted + "└"
-	for c, w := range colWidths {
-		bottom += strings.Repeat("─", w+2)
-		if c < maxCols-1 {
-			bottom += "┴"
-		}
-	}
-	bottom += "┘" + a.Reset
-	lines = append(lines, bottom)
+	lines = append(lines, r.tableHLine("└", "┴", "┘", colWidths, maxCols))
 
 	return lines
+}
+
+// tableHLine builds a horizontal table border line: left + segments + right.
+func (r *Renderer) tableHLine(left, mid, right string, colWidths []int, maxCols int) string {
+	s := r.Theme.Muted + left
+	for c, w := range colWidths {
+		s += strings.Repeat("─", w+2)
+		if c < maxCols-1 {
+			s += mid
+		}
+	}
+	s += right + a.Reset
+	return s
+}
+
+// isRendererTableSeparator checks if a line is a table separator row (e.g., |---|---|).
+func isRendererTableSeparator(line string) bool {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "|") {
+		return false
+	}
+	inner := strings.Trim(line, "| ")
+	for _, ch := range inner {
+		if ch != '-' && ch != ':' && ch != '|' && ch != ' ' {
+			return false
+		}
+	}
+	return strings.Contains(inner, "-")
 }
 
 // renderCode renders a fenced code block.
@@ -644,10 +693,25 @@ var (
 	linkRegex          = regexp.MustCompile(`\[([^\]]+)\]\([^\)]+\)`)
 )
 
+// stripInlineMarkdown removes markdown syntax markers to get the visible text length.
+// Used for table column width calculation so padding is correct after styling.
+func stripInlineMarkdown(s string) string {
+	s = boldRegex.ReplaceAllString(s, "$1")
+	s = italicRegex.ReplaceAllString(s, "$1")
+	s = strikethroughRegex.ReplaceAllString(s, "$1")
+	s = codeRegex.ReplaceAllString(s, "$1")
+	s = linkRegex.ReplaceAllString(s, "$1")
+	return s
+}
+
 // applyInlineStyles applies bold, italic, code, and link styles.
 func (r *Renderer) applyInlineStyles(text string) string {
 	// Bold
-	text = boldRegex.ReplaceAllString(text, a.Bold+"$1"+a.Reset+r.Theme.Fg)
+	boldColor := r.Theme.BoldFg
+	if boldColor == "" {
+		boldColor = r.Theme.Accent
+	}
+	text = boldRegex.ReplaceAllString(text, a.Bold+boldColor+"$1"+a.Reset+r.Theme.Fg)
 	// Italic (must come after bold to avoid conflicts)
 	text = italicRegex.ReplaceAllString(text, a.Italic+"$1"+a.Reset+r.Theme.Fg)
 	// Strikethrough
@@ -661,25 +725,26 @@ func (r *Renderer) applyInlineStyles(text string) string {
 }
 
 // wrapText wraps text to fit within the given width.
+// After wrapping, split markdown spans are repaired: if a marker like ** was
+// opened on one line but not closed, it is closed at the end and reopened
+// on the next line so that applyInlineStyles works correctly on each line.
 func wrapText(text string, width int) []string {
 	if width <= 0 {
 		return []string{text}
 	}
 
-	// Strip ANSI for measuring, but we need to preserve them in output
-	clean := a.StripAll(text)
-	if utf8.RuneCountInString(clean) <= width {
+	if utf8.RuneCountInString(stripInlineMarkdown(text)) <= width {
 		return []string{text}
 	}
 
-	// Simple word-wrap on the clean text, then reconstruct with ANSI
-	words := strings.Fields(clean)
+	// Simple word-wrap using visible length (excluding markdown markers)
+	words := strings.Fields(text)
 	var lines []string
 	var currentLine strings.Builder
 	currentLen := 0
 
 	for _, word := range words {
-		wordLen := utf8.RuneCountInString(word)
+		wordLen := utf8.RuneCountInString(stripMarkdownMarkers(word))
 		if currentLen > 0 && currentLen+1+wordLen > width {
 			lines = append(lines, currentLine.String())
 			currentLine.Reset()
@@ -696,8 +761,47 @@ func wrapText(text string, width int) []string {
 		lines = append(lines, currentLine.String())
 	}
 
-	// Re-apply inline styles to each wrapped line
+	// Fix markdown spans that were split across lines
+	return fixSplitMarkdown(lines)
+}
+
+// fixSplitMarkdown closes and reopens inline markdown markers that were split
+// across lines by wrapping. Processes ** before * to avoid ambiguity.
+func fixSplitMarkdown(lines []string) []string {
+	// Process markers in order: ** and ~~ first (2-char), then * and ` (1-char).
+	// For *, subtract occurrences that are part of ** to get true single-star count.
+	for _, marker := range []string{"**", "~~", "*", "`"} {
+		carry := false
+		for i := range lines {
+			if carry {
+				lines[i] = marker + lines[i]
+			}
+			n := strings.Count(lines[i], marker)
+			// For single *, don't count those that are part of **
+			if marker == "*" {
+				nDouble := strings.Count(lines[i], "**")
+				n = n - 2*nDouble
+			}
+			carry = (n%2 != 0)
+			if carry {
+				lines[i] = lines[i] + marker
+			}
+		}
+	}
 	return lines
+}
+
+// stripMarkdownMarkers removes *, ~, and ` characters used as markdown syntax.
+// Unlike stripInlineMarkdown (regex-based, needs matched pairs), this works on
+// individual words where markers may be split across words (e.g., "**bold" without
+// a closing "**" in the same word).
+func stripMarkdownMarkers(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '*' || r == '~' || r == '`' {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // padRight pads a rendered line with spaces so it fills the full width,

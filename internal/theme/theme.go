@@ -14,7 +14,8 @@ type Theme struct {
 	Bg string // background ANSI escape (empty for default)
 
 	// Semantic colors
-	Accent    string // accent color (headings, emphasis)
+	Accent    string // accent color (headings, links, bullets)
+	BoldFg    string // bold text foreground (falls back to Accent if empty)
 	Muted     string // muted color (blockquotes, notes)
 	CodeFg    string // code foreground
 	CodeBg    string // code background indicator
@@ -41,6 +42,7 @@ var Default = Theme{
 	Fg:             ansi.FgWhite,
 	Bg:             "",
 	Accent:         ansi.FgCyan,
+	BoldFg:         ansi.FgCyan,
 	Muted:          ansi.FgBrightBlack,
 	CodeFg:         ansi.FgGreen,
 	CodeBg:         "",
@@ -58,18 +60,20 @@ var Default = Theme{
 }
 
 // Dark is a dark theme variant.
+// Body: #aaacae, Bold: #f1f3f5, Headings: #3d90ce.
 var Dark = Theme{
 	Name:           "dark",
-	Fg:             ansi.FgBrightWhite,
+	Fg:             ansi.FgRGB(170, 172, 174), // #aaacae
 	Bg:             "",
-	Accent:         ansi.FgBrightMagenta,
+	Accent:         ansi.FgRGB(61, 144, 206),  // #3d90ce
+	BoldFg:         ansi.FgRGB(241, 243, 245), // #f1f3f5
 	Muted:          ansi.FgBrightBlack,
 	CodeFg:         ansi.FgBrightGreen,
 	CodeBg:         "",
 	ErrorFg:        ansi.FgBrightRed,
-	H1Style:        ansi.Bold + ansi.FgBrightMagenta,
-	H2Style:        ansi.Bold + ansi.FgMagenta,
-	H3Style:        ansi.Bold + ansi.FgBrightWhite,
+	H1Style:        ansi.Bold + ansi.FgRGB(61, 144, 206), // #3d90ce
+	H2Style:        ansi.Bold + ansi.FgRGB(61, 144, 206), // #3d90ce
+	H3Style:        ansi.Bold + ansi.FgRGB(61, 144, 206), // #3d90ce
 	SlideNumStyle:  ansi.Dim + ansi.FgBrightBlack,
 	NotesStyle:     ansi.Italic + ansi.FgBrightYellow,
 	TimerStyle:     ansi.FgBrightBlack,
@@ -85,6 +89,7 @@ var Light = Theme{
 	Fg:             ansi.FgBlack,
 	Bg:             "",
 	Accent:         ansi.FgBlue,
+	BoldFg:         ansi.FgBlue,
 	Muted:          ansi.FgBrightBlack,
 	CodeFg:         ansi.FgRed,
 	CodeBg:         "",

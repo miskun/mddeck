@@ -917,18 +917,27 @@ func parseTableRow(line string) []string {
 
 // parseTable parses a pipe-delimited table block.
 // Lines[0] = header row, Lines[1:] = data rows. Each line is pipe-separated.
-// The separator row (|---|---|) is detected and skipped.
+// The first separator row after the header is skipped (standard markdown).
+// Subsequent separator rows are preserved to render mid-table borders.
 func parseTable(lines []string, i int) (model.Block, int) {
 	var tableLines []string
 	j := i
+	headerSepSeen := false
 
 	for j < len(lines) {
 		trimmed := strings.TrimSpace(lines[j])
 		if !isTableLine(trimmed) {
 			break
 		}
-		// Skip separator rows (they're just formatting hints)
-		if !isTableSeparator(trimmed) {
+		if isTableSeparator(trimmed) {
+			if !headerSepSeen {
+				// Skip the first separator (standard header separator)
+				headerSepSeen = true
+			} else {
+				// Keep subsequent separators for mid-table borders
+				tableLines = append(tableLines, trimmed)
+			}
+		} else {
 			tableLines = append(tableLines, trimmed)
 		}
 		j++

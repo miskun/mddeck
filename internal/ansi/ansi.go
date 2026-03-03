@@ -166,6 +166,16 @@ func Bg256(n int) string {
 	return "\x1b[48;5;" + itoa(n) + "m"
 }
 
+// FgRGB returns a 24-bit true-color foreground escape.
+func FgRGB(r, g, b int) string {
+	return "\x1b[38;2;" + itoa(r) + ";" + itoa(g) + ";" + itoa(b) + "m"
+}
+
+// BgRGB returns a 24-bit true-color background escape.
+func BgRGB(r, g, b int) string {
+	return "\x1b[48;2;" + itoa(r) + ";" + itoa(g) + ";" + itoa(b) + "m"
+}
+
 // CursorTo moves cursor to given row, col (1-based).
 func CursorTo(row, col int) string {
 	return "\x1b[" + itoa(row) + ";" + itoa(col) + "H"
