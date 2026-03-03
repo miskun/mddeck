@@ -13,7 +13,7 @@ Terminal-native Markdown slide deck presenter, written in Go. Renders `.mddeck` 
   - `internal/parser/` — `.mddeck` file parser (frontmatter, slides, notes, blocks)
   - `internal/ansi/` — ANSI escape sequence handling and safety filtering
   - `internal/theme/` — Color theme definitions (default, dark, light)
-  - `internal/layout/` — Layout engine (auto, title, center, two-col, split, terminal)
+  - `internal/layout/` — Layout engine (auto, title, center, cols-2, rows-2, cols-3, grid-4, sidebar, terminal)
   - `internal/render/` — Markdown-to-ANSI renderer, presenter view, help overlay
   - `internal/runtime/` — Terminal raw mode, keyboard event loop, navigation
 

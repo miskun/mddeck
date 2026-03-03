@@ -126,7 +126,7 @@ func TestSlideFrontmatter(t *testing.T) {
 ---
 
 ---
-layout: two-col
+layout: cols-2
 ratio: "60/40"
 align: top
 ---
@@ -145,8 +145,8 @@ align: top
 	}
 
 	slide := deck.Slides[1]
-	if slide.Meta.Layout != model.LayoutTwoCol {
-		t.Errorf("layout = %q, want %q", slide.Meta.Layout, model.LayoutTwoCol)
+	if slide.Meta.Layout != model.LayoutCols2 {
+		t.Errorf("layout = %q, want %q", slide.Meta.Layout, model.LayoutCols2)
 	}
 	if slide.Meta.Ratio != "60/40" {
 		t.Errorf("ratio = %q, want %q", slide.Meta.Ratio, "60/40")
@@ -545,7 +545,7 @@ First content.
 Second content.
 
 ---
-layout: two-col
+layout: cols-2
 ratio: "50/50"
 ---
 
@@ -567,7 +567,7 @@ Back to normal.
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Expect: Slide One, Slide Two, two-col slide (Left+Right), Slide Four
+	// Expect: Slide One, Slide Two, cols-2 slide (Left+Right), Slide Four
 	if len(deck.Slides) != 4 {
 		t.Fatalf("got %d slides, want 4", len(deck.Slides))
 	}
@@ -577,9 +577,9 @@ Back to normal.
 		t.Error("slide 1 should have blocks")
 	}
 
-	// Slide 3: should have two-col layout from frontmatter
-	if deck.Slides[2].Meta.Layout != model.LayoutTwoCol {
-		t.Errorf("slide 3 layout = %v, want two-col", deck.Slides[2].Meta.Layout)
+	// Slide 3: should have cols-2 layout from frontmatter
+	if deck.Slides[2].Meta.Layout != model.LayoutCols2 {
+		t.Errorf("slide 3 layout = %v, want cols-2", deck.Slides[2].Meta.Layout)
 	}
 
 	// Slide 4: back to normal

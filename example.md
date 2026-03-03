@@ -283,7 +283,7 @@ For special layouts, a frontmatter block starts a new slide:
 
 ```
 ---
-layout: two-col
+layout: cols-2
 ratio: "50/50"
 ---
 ```
@@ -295,13 +295,12 @@ Both styles coexist in the same file.
 A tour of built-in layouts, one slide at a time.
 
 ---
-layout: two-col
-ratio: "50/50"
+layout: cols-2
 ---
 
 ## Two-Column Layout
 
-This content appears in the left column. Use slide frontmatter to set `layout: two-col`.
+This content appears in the left column. Use slide frontmatter to set `layout: cols-2`.
 
 - Left point A
 - Left point B
@@ -316,13 +315,13 @@ This content appears in the right column. Set custom ratios with `ratio: "50/50"
 - Right point 3
 
 ---
-layout: two-col
+layout: cols-2
 ratio: "70/30"
 ---
 
-## Code Example
+## Two-Column Layout with 70/30 Ratio
 
-The `ratio` field controls column widths. This slide uses `70/30`.
+The `ratio` field in frontmatter controls column widths. This slide uses `70/30`.
 
 ```go
 func render(slide Slide) string {
@@ -334,9 +333,9 @@ func render(slide Slide) string {
 }
 ```
 
-## Notes
+## Right Side
 
-- 70/30 ratio
+- Uses 70/30 ratio
 - Code on the left
 - Notes on the right
 
@@ -350,11 +349,11 @@ layout: terminal
 $ mddeck --present slides.md
 ╭─────────────────────────────────────────╮
 │  Welcome to mddeck                      │
-│                                          │
-│  Terminal-native presentations,          │
-│  powered by Markdown.                    │
-│                                          │
-│                               1 / 7      │
+│                                         │
+│  Terminal-native presentations,         │
+│  powered by Markdown.                   │
+│                                         │
+│                               1 / 7     │
 ╰─────────────────────────────────────────╯
 ```
 
@@ -373,7 +372,7 @@ This is a narrow sidebar.
 The **sidebar** layout uses `columns: [30, 70]` to create a narrow left panel and a wide right panel. Content blocks are distributed round-robin across the regions.
 
 ---
-layout: thirds
+layout: cols-3
 ---
 
 ## Column A
@@ -389,7 +388,7 @@ Second third with *emphasis*.
 Third column to the right.
 
 ---
-layout: quad
+layout: grid-4
 ---
 
 ## Top Left

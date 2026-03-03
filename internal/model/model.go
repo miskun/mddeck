@@ -9,12 +9,12 @@ const (
 	LayoutDefault  Layout = "default"
 	LayoutTitle    Layout = "title"
 	LayoutCenter   Layout = "center"
-	LayoutTwoCol   Layout = "two-col"
-	LayoutSplit    Layout = "split"
+	LayoutCols2    Layout = "cols-2"
+	LayoutRows2    Layout = "rows-2"
 	LayoutTerminal Layout = "terminal"
 	LayoutSidebar  Layout = "sidebar"
-	LayoutThirds   Layout = "thirds"
-	LayoutQuad     Layout = "quad"
+	LayoutCols3    Layout = "cols-3"
+	LayoutGrid4    Layout = "grid-4"
 )
 
 // Align represents vertical alignment within a layout region.

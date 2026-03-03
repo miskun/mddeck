@@ -208,7 +208,7 @@ func isSlideBreak(lines []string, idx int, start int) bool {
 //   - # Title     → starts a new title slide
 //   - ## Content   → starts a new content slide
 //   - ### Sub      → stays within the current slide
-//   - ---\nlayout: two-col\n--- → starts a new slide with that layout
+//   - ---\nlayout: cols-2\n--- → starts a new slide with that layout
 func splitSlidesByHeaders(content string, layouts map[string]model.CustomLayout) []string {
 	lines := strings.Split(content, "\n")
 
@@ -375,7 +375,7 @@ func isSlideFrontmatter(lines []string, idx int) (endIdx int, ok bool) {
 // computeHeadersToSkip determines how many subsequent headers a slide
 // frontmatter should absorb based on its layout.
 // For custom layouts, it computes cols × rows from the layout definition.
-// For built-in multi-region layouts (two-col, split), returns 2.
+// For built-in multi-region layouts (cols-2, rows-2, sidebar), returns 2.
 // For other built-in layouts, returns 1.
 // If no layout is specified, returns 0 (resume marker).
 func computeHeadersToSkip(fmYAML string, layouts map[string]model.CustomLayout) int {
@@ -413,11 +413,11 @@ func computeHeadersToSkip(fmYAML string, layouts map[string]model.CustomLayout) 
 
 	// Built-in multi-region layouts
 	switch layoutName {
-	case "two-col", "split", "sidebar":
+	case "cols-2", "rows-2", "sidebar":
 		return 2
-	case "thirds":
+	case "cols-3":
 		return 3
-	case "quad":
+	case "grid-4":
 		return 4
 	}
 

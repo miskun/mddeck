@@ -44,11 +44,11 @@ func builtinLayouts() map[string]model.CustomLayout {
 			Columns: []int{100},
 			PadY:    intPtr(0),
 		},
-		"two-col": {
+		"cols-2": {
 			Columns: []int{50, 50},
 			PadY:    intPtr(1),
 		},
-		"split": {
+		"rows-2": {
 			Rows: []int{60, 40},
 			PadY: intPtr(1),
 		},
@@ -60,11 +60,11 @@ func builtinLayouts() map[string]model.CustomLayout {
 			Columns: []int{30, 70},
 			PadY:    intPtr(1),
 		},
-		"thirds": {
+		"cols-3": {
 			Columns: []int{33, 34, 33},
 			PadY:    intPtr(1),
 		},
-		"quad": {
+		"grid-4": {
 			Columns: []int{50, 50},
 			Rows:    []int{50, 50},
 			PadY:    intPtr(1),
@@ -140,8 +140,8 @@ func ComputeLayout(slide *model.Slide, vp Viewport, deckMeta *model.DeckMeta) La
 	// Resolve layout definition (builtin, overridden, or custom)
 	def := resolveLayout(string(layout), deckMeta)
 
-	// For two-col, allow per-slide ratio override
-	if layout == model.LayoutTwoCol && slide.Meta.Ratio != "" {
+	// For cols-2, allow per-slide ratio override
+	if layout == model.LayoutCols2 && slide.Meta.Ratio != "" {
 		if l, r, ok := parseRatio(slide.Meta.Ratio); ok {
 			def.Columns = []int{l, r}
 		}
@@ -362,7 +362,7 @@ func autoDetect(slide *model.Slide) model.Layout {
 		return model.LayoutTerminal
 	}
 	if majorBlocks == 2 {
-		return model.LayoutTwoCol
+		return model.LayoutCols2
 	}
 
 	return model.LayoutDefault

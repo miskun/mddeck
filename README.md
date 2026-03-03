@@ -121,7 +121,7 @@ A per-slide YAML frontmatter block (`---` / YAML / `---`) also starts a new slid
 Content split by headers.
 
 ---
-layout: two-col
+layout: cols-2
 ratio: "50/50"
 ---
 
@@ -138,7 +138,7 @@ Right content.
 This slide splits on the header again.
 ```
 
-The parser automatically absorbs the correct number of headers based on region count. For example, `two-col` and `sidebar` absorb 2 headers, `thirds` absorbs 3, `quad` absorbs 4. Single-region layouts absorb 1 header. Custom layouts compute regions as cols × rows.
+The parser automatically absorbs the correct number of headers based on region count. For example, `cols-2` and `sidebar` absorb 2 headers, `cols-3` absorbs 3, `grid-4` absorbs 4. Single-region layouts absorb 1 header. Custom layouts compute regions as cols × rows.
 
 ### Disabling Auto-Split (`autosplit: false`)
 
@@ -227,7 +227,7 @@ Individual slides may begin with YAML frontmatter (after a slide break).
 
 ```yaml
 ---
-layout: two-col
+layout: cols-2
 ratio: "60/40"
 align: top
 ---
@@ -238,13 +238,13 @@ align: top
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `layout` | enum | `"auto"` | Layout mode |
-| `ratio` | string | `""` | Column ratio for `two-col` (e.g. `"60/40"`) |
+| `ratio` | string | `""` | Column ratio for `cols-2` (e.g. `"60/40"`) |
 | `align` | enum | `"top"` | Vertical alignment |
 | `title` | string | `""` | Slide title |
 | `class` | string | `""` | Style class |
 | `autosplit` | bool | `true` | Enable header-based splitting within this slide |
 
-**Layout values:** `auto`, `default`, `title`, `center`, `two-col`, `split`, `terminal`, `sidebar`, `thirds`, `quad`
+**Layout values:** `auto`, `default`, `title`, `center`, `cols-2`, `rows-2`, `terminal`, `sidebar`, `cols-3`, `grid-4`
 
 **Align values:** `top`, `middle`, `bottom`
 
@@ -406,12 +406,12 @@ All built-in layouts use the same defaults: horizontal padding from aspect ratio
 | `default` | 1×1 | Standard single-region, top-aligned |
 | `title` | 1×1 | Centered title slide (large heading) |
 | `center` | 1×1 | Content centered vertically and horizontally |
-| `two-col` | 2×1 (50/50) | Two columns |
-| `split` | 1×2 (60/40) | Top/bottom split |
+| `cols-2` | 2×1 (50/50) | Two columns |
+| `rows-2` | 1×2 (60/40) | Top/bottom split |
 | `terminal` | 1×1 | Single region for code/art |
 | `sidebar` | 2×1 (30/70) | Narrow left panel, wide right panel |
-| `thirds` | 3×1 (33/34/33) | Three equal columns |
-| `quad` | 2×2 (50/50 × 50/50) | Four equal quadrants |
+| `cols-3` | 3×1 (33/34/33) | Three equal columns |
+| `grid-4` | 2×2 (50/50 × 50/50) | Four equal quadrants |
 
 ### Auto-Detection Heuristics
 
@@ -421,16 +421,16 @@ When `layout: auto` (the default), the layout is chosen as follows:
 |-----------|--------|
 | Single H1 + minimal text (≤3 blocks) | `title` |
 | Single code/art block (≤2 blocks) | `terminal` |
-| Two major blocks (top-level headings) | `two-col` |
+| Two major blocks (top-level headings) | `cols-2` |
 | Otherwise | `default` |
 
-### Two-Column Ratio
+### Column Ratio
 
-The `two-col` layout defaults to a 50/50 column split. Override per slide:
+The `cols-2` layout defaults to a 50/50 column split. Override per slide:
 
 ```yaml
 ---
-layout: two-col
+layout: cols-2
 ratio: "50/50"
 ---
 ```
@@ -511,7 +511,7 @@ layouts:
   default:
     padX: 10
     padY: 3
-  two-col:
+  cols-2:
     columns: [50, 50]
     gutter: 4
 ---
@@ -634,7 +634,7 @@ Opening remarks go here.
 - **Simple** — just Markdown
 
 ---
-layout: two-col
+layout: cols-2
 ratio: "50/50"
 ---
 

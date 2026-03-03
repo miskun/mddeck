@@ -45,7 +45,7 @@ func newScreenBuf(width, height int) *screenBuf {
 
 // Set places ANSI-styled content at the given 0-based row and column.
 // Multiple calls to the same row at different columns are composed correctly
-// (e.g. two-column layouts). Calls are ignored if row is out of bounds.
+// (e.g. multi-column layouts). Calls are ignored if row is out of bounds.
 func (sb *screenBuf) Set(row, col int, content string) {
 	if row < 0 || row >= sb.height || col < 0 {
 		return

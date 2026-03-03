@@ -38,7 +38,7 @@ func TestAutoDetectTerminal(t *testing.T) {
 	}
 }
 
-func TestAutoDetectTwoCol(t *testing.T) {
+func TestAutoDetectCols2(t *testing.T) {
 	slide := &model.Slide{
 		Meta: model.SlideMetaDefaults(),
 		Blocks: []model.Block{
@@ -52,15 +52,15 @@ func TestAutoDetectTwoCol(t *testing.T) {
 	vp := Viewport{Width: 80, Height: 24}
 	result := ComputeLayout(slide, vp, nil)
 
-	if result.Mode != model.LayoutTwoCol {
-		t.Errorf("mode = %q, want %q", result.Mode, model.LayoutTwoCol)
+	if result.Mode != model.LayoutCols2 {
+		t.Errorf("mode = %q, want %q", result.Mode, model.LayoutCols2)
 	}
 }
 
-func TestTwoColRatio(t *testing.T) {
+func TestCols2Ratio(t *testing.T) {
 	slide := &model.Slide{
 		Meta: model.SlideMeta{
-			Layout: model.LayoutTwoCol,
+			Layout: model.LayoutCols2,
 			Ratio:  "70/30",
 			Align:  model.AlignTop,
 		},
