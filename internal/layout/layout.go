@@ -358,6 +358,21 @@ func autoDetect(slide *model.Slide) model.Layout {
 	if h1Count == 1 && totalNonBlank <= 3 {
 		return model.LayoutTitle
 	}
+	// A single heading (any level) with minimal content → title slide.
+	// This catches section dividers produced by header-based splitting
+	// (e.g. "## 01 / THE FINANCIAL REALITY" as a standalone slide).
+	if totalNonBlank <= 2 {
+		headingOnly := true
+		for _, b := range blocks {
+			if b.Type != model.BlockHeading && b.Type != model.BlockHorizontalRule {
+				headingOnly = false
+				break
+			}
+		}
+		if headingOnly {
+			return model.LayoutTitle
+		}
+	}
 	if artCodeCount == 1 && totalNonBlank <= 2 {
 		return model.LayoutTerminal
 	}
