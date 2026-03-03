@@ -101,6 +101,73 @@ Some text.
 # Same slide (this --- renders as a horizontal rule)
 ```
 
+### Header-Based Splitting
+
+When a file contains **no `---` slide breaks**, mddeck automatically splits on headers instead (similar to [patat](https://github.com/jaspervdj/patat)):
+
+- The deepest heading level used becomes the **split level**
+- Each heading at or above that level starts a new slide
+- Headings below the split level stay within the current slide
+
+For example, if the deepest heading in the file is `##`, then every `#` and `##` starts a new slide, while `###` and below remain part of the current slide.
+
+### Frontmatter as Slide Boundary
+
+A per-slide YAML frontmatter block (`---` / YAML / `---`) also starts a new slide, even in header-split mode. This lets you mix header-based splitting with layout-specific slides:
+
+```markdown
+## Regular Slide
+
+Content split by headers.
+
+---
+layout: two-col
+ratio: "50/50"
+---
+
+## Left Column
+
+Left content.
+
+## Right Column
+
+Right content.
+
+## Back to Normal
+
+This slide splits on the header again.
+```
+
+When a frontmatter block specifies `layout: two-col` or `layout: split`, two subsequent headers are absorbed into that slide (for the two regions). Other layouts absorb one header.
+
+### Disabling Auto-Split (`autosplit: false`)
+
+To group multiple headings onto a single slide, use `autosplit: false` in per-slide frontmatter. All content is absorbed until the next frontmatter block:
+
+```markdown
+---
+autosplit: false
+---
+
+## All Heading Levels
+
+# Heading 1
+## Heading 2
+### Heading 3
+
+All on one slide.
+
+---
+autosplit: true
+---
+
+## Next Slide
+
+Normal splitting resumes here.
+```
+
+The `autosplit: true` block acts as a resume marker — it produces no visible slide itself.
+
 ---
 
 ## Frontmatter
@@ -153,6 +220,7 @@ align: top
 | `align` | enum | `"top"` | Vertical alignment |
 | `title` | string | `""` | Slide title |
 | `class` | string | `""` | Style class |
+| `autosplit` | bool | `true` | Enable header-based splitting within this slide |
 
 **Layout values:** `auto`, `title`, `center`, `two-col`, `split`, `terminal`
 
