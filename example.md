@@ -2,6 +2,17 @@
 title: "Markdown in mddeck"
 theme: "default"
 wrap: true
+aspect: "16:9"
+layouts:
+  sidebar:
+    columns: [30, 70]
+    gutter: 3
+  thirds:
+    columns: [33, 34, 33]
+  quad:
+    columns: [50, 50]
+    rows: [50, 50]
+    gutter: 1
 ---
 
 # Markdown in mddeck
@@ -228,55 +239,6 @@ $ mddeck --present slides.md
 
 Full viewport width — ideal for code and art.
 
-## Speaker Notes
-
-This slide has speaker notes attached. Press `t` to toggle presenter mode and see them.
-
-In presenter mode you get:
-
-- Current slide and next slide preview
-- Speaker notes
-- Elapsed timer
-
-???
-These are the speaker notes! Only visible in presenter mode.
-
-Remind the audience about the `t` key.
-
-## Keyboard Shortcuts
-
-- **Space** / **Enter** / **→** — Next slide
-- **Backspace** / **←** — Previous slide
-- **Home** / **End** — First / last slide
-- **t** — Toggle presenter mode
-- **?** — Help overlay
-- **q** — Quit
-
-## Themes
-
-Three built-in themes, set via `--theme` or frontmatter:
-
-- `default` — Cyan accent on default background
-- `dark` — Magenta accent for dark terminals
-- `light` — Blue accent for light terminals
-
-Try: `mddeck --theme dark example.md`
-
-## How Slide Splitting Works
-
-Most slides in this file split on `##` headers automatically — no `---` needed.
-
-For special layouts, a frontmatter block starts a new slide:
-
-```
----
-layout: two-col
-ratio: "50/50"
----
-```
-
-Both styles coexist in the same file.
-
 ## Strikethrough
 
 Use `~~text~~` to render ~~struck-through text~~.
@@ -354,6 +316,103 @@ these lines merge into one paragraph.
 
 > [!CAUTION]
 > Signals danger — something that could cause data loss or harm.
+
+## Speaker Notes
+
+This slide has speaker notes attached. Press `t` to toggle presenter mode and see them.
+
+In presenter mode you get:
+
+- Current slide and next slide preview
+- Speaker notes
+- Elapsed timer
+
+???
+These are the speaker notes! Only visible in presenter mode.
+
+Remind the audience about the `t` key.
+
+## Keyboard Shortcuts
+
+- **Space** / **Enter** / **→** — Next slide
+- **Backspace** / **←** — Previous slide
+- **Home** / **End** — First / last slide
+- **t** — Toggle presenter mode
+- **?** — Help overlay
+- **q** — Quit
+
+## Themes
+
+Three built-in themes, set via `--theme` or frontmatter:
+
+- `default` — Cyan accent on default background
+- `dark` — Magenta accent for dark terminals
+- `light` — Blue accent for light terminals
+
+Try: `mddeck --theme dark example.md`
+
+## How Slide Splitting Works
+
+Most slides in this file split on `##` headers automatically — no `---` needed.
+
+For special layouts, a frontmatter block starts a new slide:
+
+```
+---
+layout: two-col
+ratio: "50/50"
+---
+```
+
+Both styles coexist in the same file.
+
+---
+layout: sidebar
+---
+
+## Sidebar Layout
+
+This is a narrow sidebar.
+
+## Main Content
+
+The **sidebar** layout uses `columns: [30, 70]` to create a narrow left panel and a wide right panel. Content blocks are distributed round-robin across the regions.
+
+---
+layout: thirds
+---
+
+## Column A
+
+First third of the content.
+
+## Column B
+
+Second third with *emphasis*.
+
+## Column C
+
+Third column to the right.
+
+---
+layout: quad
+---
+
+## Top Left
+
+Quarter one.
+
+## Top Right
+
+Quarter two.
+
+## Bottom Left
+
+Quarter three.
+
+## Bottom Right
+
+Quarter four.
 
 # Thank You!
 

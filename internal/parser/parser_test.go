@@ -823,3 +823,66 @@ Line two`
 		t.Errorf("raw = %q, want embedded newline", blocks[0].Raw)
 	}
 }
+
+func TestDeckFrontmatterCustomLayouts(t *testing.T) {
+	input := `---
+aspect: "16:9"
+layouts:
+  sidebar:
+    columns: [30, 70]
+    gutter: 3
+    padX: 4
+    padY: 2
+  grid2x2:
+    columns: [50, 50]
+    rows: [50, 50]
+---
+
+# Slide 1
+
+Hello`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if deck.Meta.Aspect != "16:9" {
+		t.Errorf("aspect = %q, want %q", deck.Meta.Aspect, "16:9")
+	}
+	if len(deck.Meta.Layouts) != 2 {
+		t.Fatalf("layouts count = %d, want 2", len(deck.Meta.Layouts))
+	}
+
+	sb, ok := deck.Meta.Layouts["sidebar"]
+	if !ok {
+		t.Fatal("missing sidebar layout")
+	}
+	if len(sb.Columns) != 2 || sb.Columns[0] != 30 || sb.Columns[1] != 70 {
+		t.Errorf("sidebar columns = %v, want [30 70]", sb.Columns)
+	}
+	if sb.GetGutter() != 3 {
+		t.Errorf("sidebar gutter = %d, want 3", sb.GetGutter())
+	}
+	if sb.GetPadX() != 4 {
+		t.Errorf("sidebar padx = %d, want 4", sb.GetPadX())
+	}
+	if sb.GetPadY() != 2 {
+		t.Errorf("sidebar pady = %d, want 2", sb.GetPadY())
+	}
+
+	g, ok := deck.Meta.Layouts["grid2x2"]
+	if !ok {
+		t.Fatal("missing grid2x2 layout")
+	}
+	if len(g.Columns) != 2 || len(g.Rows) != 2 {
+		t.Errorf("grid2x2 = %v cols, %v rows", g.Columns, g.Rows)
+	}
+	// No gutter/pad specified → defaults
+	if g.GetGutter() != 2 {
+		t.Errorf("default gutter = %d, want 2", g.GetGutter())
+	}
+	if g.GetPadX() != -1 {
+		t.Errorf("default padx = %d, want -1 (unset)", g.GetPadX())
+	}
+}

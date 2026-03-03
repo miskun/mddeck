@@ -71,7 +71,7 @@ func Parse(content string) (*model.Deck, error) {
 	// try header-based splitting à la patat: find the most deeply nested
 	// header level and split on it. Headers above that level become title slides.
 	if len(slideTexts) <= 1 && len(slideTexts) == 1 {
-		headerSlides := splitSlidesByHeaders(slideTexts[0])
+		headerSlides := splitSlidesByHeaders(slideTexts[0], deck.Meta.Layouts)
 		if len(headerSlides) > 1 {
 			slideTexts = headerSlides
 		}
@@ -209,7 +209,7 @@ func isSlideBreak(lines []string, idx int, start int) bool {
 //   - ## Content   → starts a new content slide
 //   - ### Sub      → stays within the current slide
 //   - ---\nlayout: two-col\n--- → starts a new slide with that layout
-func splitSlidesByHeaders(content string) []string {
+func splitSlidesByHeaders(content string, layouts map[string]model.CustomLayout) []string {
 	lines := strings.Split(content, "\n")
 
 	// Find the deepest (most nested) header level used.
@@ -304,18 +304,11 @@ func splitSlidesByHeaders(content string) []string {
 					i++
 				}
 			} else {
-				// Default: determine how many subsequent headers belong
-				// to this frontmatter slide. Layout-specific slides need
-				// headers: two-col/split need 2, other layouts need 1.
-				// A frontmatter with no layout (e.g. just autosplit: true)
-				// is a resume marker — don't absorb any headers.
-				if strings.Contains(fmYAML, "two-col") || strings.Contains(fmYAML, "layout: split") {
-					headersToSkip = 2
-				} else if strings.Contains(fmYAML, "layout") {
-					headersToSkip = 1
-				} else {
-					headersToSkip = 0
-				}
+				// Determine how many subsequent headers to absorb.
+				// Built-in multi-region layouts need 2, single-region need 1.
+				// Custom layouts: compute cols × rows for region count.
+				// No layout key → resume marker, absorb nothing.
+				headersToSkip = computeHeadersToSkip(fmYAML, layouts)
 			}
 			continue
 		}
@@ -379,6 +372,54 @@ func isSlideFrontmatter(lines []string, idx int) (endIdx int, ok bool) {
 }
 
 // headerLevel returns the heading level (1-6) for a markdown heading line,
+// computeHeadersToSkip determines how many subsequent headers a slide
+// frontmatter should absorb based on its layout.
+// For custom layouts, it computes cols × rows from the layout definition.
+// For built-in multi-region layouts (two-col, split), returns 2.
+// For other built-in layouts, returns 1.
+// If no layout is specified, returns 0 (resume marker).
+func computeHeadersToSkip(fmYAML string, layouts map[string]model.CustomLayout) int {
+	// Extract layout value from the YAML
+	layoutName := ""
+	for _, line := range strings.Split(fmYAML, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "layout:") {
+			val := strings.TrimPrefix(line, "layout:")
+			layoutName = strings.TrimSpace(val)
+			// Strip optional quotes
+			layoutName = strings.Trim(layoutName, "\"'")
+			break
+		}
+	}
+
+	if layoutName == "" {
+		return 0 // no layout → resume marker
+	}
+
+	// Check custom layouts first
+	if layouts != nil {
+		if custom, ok := layouts[layoutName]; ok {
+			cols := len(custom.Columns)
+			rows := len(custom.Rows)
+			if cols == 0 {
+				cols = 1
+			}
+			if rows == 0 {
+				rows = 1
+			}
+			return cols * rows
+		}
+	}
+
+	// Built-in multi-region layouts
+	if layoutName == "two-col" || layoutName == "split" {
+		return 2
+	}
+
+	// Other built-in layouts (title, default, center, terminal)
+	return 1
+}
+
 // or 0 if the line is not a heading.
 func headerLevel(line string) int {
 	if !strings.HasPrefix(line, "#") {

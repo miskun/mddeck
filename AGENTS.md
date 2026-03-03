@@ -20,11 +20,13 @@ Terminal-native Markdown slide deck presenter, written in Go. Renders `.mddeck` 
 ## Build & Test
 
 ```bash
-go build ./cmd/mddeck/        # build binary
-go test ./...                  # run all tests
-./mddeck example.mddeck       # run with sample deck
-./mddeck --present example.mddeck  # presenter mode
+go build -o mddeck ./cmd/mddeck/  # build binary (always use -o to produce fresh binary)
+go test ./...                      # run all tests
+./mddeck example.md               # run with sample deck
+./mddeck --present example.md     # presenter mode
 ```
+
+**Important:** `go build ./...` only checks compilation — it does NOT write an output binary. Always use `go build -o mddeck ./cmd/mddeck/` to produce a runnable binary. Do this after every code change so `./mddeck` is always up to date.
 
 ## Code Conventions
 

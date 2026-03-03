@@ -196,6 +196,8 @@ tabSize: 2
 | `maxWidth` | int | `0` (auto) | Maximum viewport width |
 | `maxHeight` | int | `0` (auto) | Maximum viewport height |
 | `safeAnsi` | bool | `true` | Strip non-SGR ANSI sequences |
+| `aspect` | string | `""` | Target aspect ratio (e.g. `"16:9"`, `"4:3"`) |
+| `layouts` | map | `{}` | Custom layout definitions |
 
 Unknown fields are silently ignored.
 
@@ -222,7 +224,7 @@ align: top
 | `class` | string | `""` | Style class |
 | `autosplit` | bool | `true` | Enable header-based splitting within this slide |
 
-**Layout values:** `auto`, `title`, `center`, `two-col`, `split`, `terminal`
+**Layout values:** `auto`, `default`, `title`, `center`, `two-col`, `split`, `terminal`
 
 **Align values:** `top`, `middle`, `bottom`
 
@@ -372,18 +374,19 @@ When `safeAnsi = false`, additional sequences pass through, but the runtime neve
 
 ## Layout System
 
-Rendering is cell-based, filling the terminal viewport.
+All layouts — built-in and custom — use the same grid engine. Built-in layouts are simply pre-defined grid configurations that save you from writing them out each time.
 
-### Layout Modes
+### Built-in Layouts
 
-| Layout | Description |
-|--------|-------------|
-| `auto` | Automatically detected from content |
-| `title` | Centered title slide |
-| `center` | Content with horizontal padding |
-| `two-col` | Two columns side by side |
-| `split` | Top/bottom split (60/40) |
-| `terminal` | Full-width for code/art |
+| Layout | Grid | Padding | Description |
+|--------|------|---------|-------------|
+| `auto` | (detected) | — | Automatically detected from content |
+| `default` | 1×1 | padX: W/8, padY: 1 | Proportional horizontal padding, top-aligned |
+| `title` | 1×1 | padX: 0, padY: 0 | Centered title slide (large heading) |
+| `center` | 1×1 | padX: W/8, padY: 0 | Content centered vertically and horizontally |
+| `two-col` | 2×1 (62/38) | padX: 0, padY: 1 | Two columns, gutter: 2 |
+| `split` | 1×2 (60/40) | padX: 2, padY: 1 | Top/bottom split, gutter: 1 |
+| `terminal` | 1×1 | padX: 2, padY: 1 | Minimal padding for code/art |
 
 ### Auto-Detection Heuristics
 
@@ -394,20 +397,101 @@ When `layout: auto` (the default), the layout is chosen as follows:
 | Single H1 + minimal text (≤3 blocks) | `title` |
 | Single code/art block (≤2 blocks) | `terminal` |
 | Two major blocks (top-level headings) | `two-col` |
-| Otherwise | `center` |
+| Otherwise | `default` |
 
-### Two-Column Layout
+### Two-Column Ratio
 
-- Default ratio: **62/38**
-- Custom ratio via `ratio: "A/B"` (e.g. `"50/50"`, `"70/30"`)
-- Gutter: 2 spaces
-- Major blocks distributed alternately left/right
+The `two-col` layout defaults to a 62/38 column split. Override per slide:
 
-### Split Layout
+```yaml
+---
+layout: two-col
+ratio: "50/50"
+---
+```
 
-- Top region: 60% height
-- Bottom region: 40% height
-- First major block → top, remaining → bottom
+### Aspect Ratio
+
+Set `aspect` in deck frontmatter to constrain the slide area to a target aspect ratio. Padding is added automatically to letterbox or pillarbox the content.
+
+```yaml
+---
+aspect: "16:9"
+---
+```
+
+Terminal character cells are approximately 1:2 (width:height), so a 16:9 aspect target computes the correct padding accounting for this cell ratio. Aspect padding acts as a minimum — it never shrinks a layout's own padding.
+
+### Custom Layouts
+
+Define custom grid layouts in deck frontmatter under `layouts`. Custom layouts use the exact same parameters as built-in layouts — columns, rows, gutter, padding.
+
+```yaml
+---
+layouts:
+  sidebar:
+    columns: [30, 70]
+    gutter: 3
+  thirds:
+    columns: [33, 34, 33]
+  quad:
+    columns: [50, 50]
+    rows: [50, 50]
+    gutter: 1
+---
+```
+
+Reference a custom layout per slide:
+
+```yaml
+---
+layout: sidebar
+---
+```
+
+The parser automatically absorbs the correct number of headings per slide based on region count (cols × rows).
+
+#### Layout Fields
+
+These fields apply to both custom layouts and built-in overrides:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `columns` | `[]int` | `[100]` | Column widths as percentages |
+| `rows` | `[]int` | `[100]` | Row heights as percentages |
+| `gutter` | int | `2` | Gap between cells in characters |
+| `padX` | int | proportional (W/8) | Horizontal padding |
+| `padY` | int | `1` | Vertical padding |
+| `align` | enum | `"top"` | Content alignment within cells |
+
+#### Grid Region Order
+
+Regions are created in **row-major order** (left-to-right, top-to-bottom). Content blocks are distributed across regions by splitting at H1/H2 headings (major blocks) and assigning them round-robin.
+
+Example: a `columns: [50, 50]` + `rows: [50, 50]` layout creates 4 regions. With 4 major blocks (## A, ## B, ## C, ## D), they map to:
+
+| Region | Position | Content |
+|--------|----------|---------|
+| 0 | top-left | ## A |
+| 1 | top-right | ## B |
+| 2 | bottom-left | ## C |
+| 3 | bottom-right | ## D |
+
+#### Overriding Built-in Layouts
+
+Override any built-in layout's parameters by defining it in your deck frontmatter. Unspecified fields keep their defaults:
+
+```yaml
+---
+layouts:
+  default:
+    padX: 10
+    padY: 3
+  two-col:
+    columns: [50, 50]
+    gutter: 4
+---
+```
 
 ---
 

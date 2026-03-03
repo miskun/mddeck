@@ -35,20 +35,22 @@ func NewRenderer(deck *model.Deck, th theme.Theme) *Renderer {
 
 // RenderSlide renders a single slide and returns composed lines for diff-based output.
 func (r *Renderer) RenderSlide(slide *model.Slide, vp layout.Viewport) []string {
-	lr := layout.ComputeLayout(slide, vp)
+	lr := layout.ComputeLayout(slide, vp, &r.Deck.Meta)
 	scr := newScreenBuf(vp.Width, vp.Height)
 
 	switch lr.Mode {
 	case model.LayoutTitle:
 		r.renderTitle(slide, lr.Regions[0], scr)
-	case model.LayoutTwoCol:
-		r.renderTwoCol(slide, lr, scr)
-	case model.LayoutSplit:
-		r.renderSplitLayout(slide, lr, scr)
-	case model.LayoutTerminal:
-		r.renderSingleRegion(slide.Blocks, lr.Regions[0], scr)
-	default: // center
-		r.renderSingleRegion(slide.Blocks, lr.Regions[0], scr)
+	case model.LayoutCenter:
+		r.renderCentered(slide, lr.Regions[0], scr)
+	default:
+		// All layouts (built-in and custom) use the same grid renderer.
+		// Single region → render directly. Multiple regions → distribute blocks.
+		if len(lr.Regions) > 1 {
+			r.renderGrid(slide, lr, scr)
+		} else if len(lr.Regions) == 1 {
+			r.renderSingleRegion(slide.Blocks, lr.Regions[0], scr)
+		}
 	}
 
 	// Status bar: place into screen buffer so it's part of the line diff
@@ -90,58 +92,57 @@ func (r *Renderer) renderTitle(slide *model.Slide, region layout.Region, scr *sc
 	}
 }
 
-// renderTwoCol renders a two-column layout.
-func (r *Renderer) renderTwoCol(slide *model.Slide, lr layout.LayoutResult, scr *screenBuf) {
-	majors := layout.SplitBlocksIntoMajor(slide.Blocks)
+// renderCentered renders a center-layout slide (centered vertically and horizontally).
+func (r *Renderer) renderCentered(slide *model.Slide, region layout.Region, scr *screenBuf) {
+	lines := r.renderBlocks(slide.Blocks, region.Width)
 
-	// Distribute major blocks alternately
-	var leftBlocks, rightBlocks []model.Block
-	for i, maj := range majors {
-		blocks := []model.Block{maj.Heading}
-		blocks = append(blocks, maj.Content...)
-		// Remove zero-value headings
-		var filtered []model.Block
-		for _, b := range blocks {
-			if b.Type == model.BlockHeading || b.Raw != "" || len(b.Lines) > 0 {
-				filtered = append(filtered, b)
-			}
-		}
-		if i%2 == 0 {
-			leftBlocks = append(leftBlocks, filtered...)
-		} else {
-			rightBlocks = append(rightBlocks, filtered...)
-		}
+	// Center vertically
+	startY := region.Y + (region.Height-len(lines))/2
+	if startY < region.Y {
+		startY = region.Y
 	}
 
-	// If no right blocks, put everything on left
-	if len(rightBlocks) == 0 && len(leftBlocks) > 1 {
-		mid := len(leftBlocks) / 2
-		rightBlocks = leftBlocks[mid:]
-		leftBlocks = leftBlocks[:mid]
-	}
-
-	r.renderInRegion(leftBlocks, lr.Regions[0], scr)
-	if len(lr.Regions) > 1 {
-		r.renderInRegion(rightBlocks, lr.Regions[1], scr)
+	for i, line := range lines {
+		if i >= region.Height {
+			break
+		}
+		row := startY + i
+		line = r.cropLine(line, region.Width)
+		// Center horizontally
+		visLen := a.VisibleLen(line)
+		padLeft := (region.Width - visLen) / 2
+		if padLeft < 0 {
+			padLeft = 0
+		}
+		scr.Set(row, region.X+padLeft, line)
 	}
 }
 
-// renderSplitLayout renders a split (top/bottom) layout.
-func (r *Renderer) renderSplitLayout(slide *model.Slide, lr layout.LayoutResult, scr *screenBuf) {
+// renderGrid renders blocks distributed across N regions in a grid layout.
+// Major blocks (heading + its content) are distributed round-robin across regions.
+func (r *Renderer) renderGrid(slide *model.Slide, lr layout.LayoutResult, scr *screenBuf) {
 	majors := layout.SplitBlocksIntoMajor(slide.Blocks)
+	nRegions := len(lr.Regions)
 
-	var topBlocks, bottomBlocks []model.Block
-	if len(majors) > 0 {
-		topBlocks = append([]model.Block{majors[0].Heading}, majors[0].Content...)
-	}
-	for _, maj := range majors[1:] {
-		bottomBlocks = append(bottomBlocks, maj.Heading)
-		bottomBlocks = append(bottomBlocks, maj.Content...)
+	// Distribute major blocks round-robin into region buckets
+	regionBlocks := make([][]model.Block, nRegions)
+	for i, maj := range majors {
+		idx := i % nRegions
+		if maj.Heading.Type != 0 {
+			regionBlocks[idx] = append(regionBlocks[idx], maj.Heading)
+		}
+		regionBlocks[idx] = append(regionBlocks[idx], maj.Content...)
 	}
 
-	r.renderInRegion(topBlocks, lr.Regions[0], scr)
-	if len(lr.Regions) > 1 {
-		r.renderInRegion(bottomBlocks, lr.Regions[1], scr)
+	// If no major blocks detected, put everything in the first region
+	if len(majors) == 0 {
+		regionBlocks[0] = slide.Blocks
+	}
+
+	for i, blocks := range regionBlocks {
+		if len(blocks) > 0 {
+			r.renderInRegion(blocks, lr.Regions[i], scr)
+		}
 	}
 }
 
@@ -709,7 +710,7 @@ func (r *Renderer) RenderPresenter(slide *model.Slide, vp layout.Viewport, elaps
 	}
 
 	// Render current slide content
-	lr := layout.ComputeLayout(slide, layout.Viewport{Width: currentRegion.Width, Height: currentRegion.Height})
+	lr := layout.ComputeLayout(slide, layout.Viewport{Width: currentRegion.Width, Height: currentRegion.Height}, &r.Deck.Meta)
 	if len(lr.Regions) > 0 {
 		renderedLines := r.renderBlocks(slide.Blocks, lr.Regions[0].Width)
 		for i, line := range renderedLines {

@@ -6,6 +6,7 @@ type Layout string
 
 const (
 	LayoutAuto     Layout = "auto"
+	LayoutDefault  Layout = "default"
 	LayoutTitle    Layout = "title"
 	LayoutCenter   Layout = "center"
 	LayoutTwoCol   Layout = "two-col"
@@ -24,13 +25,53 @@ const (
 
 // DeckMeta holds deck-level frontmatter.
 type DeckMeta struct {
-	Title     string `yaml:"title"`
-	Theme     string `yaml:"theme"`
-	Wrap      *bool  `yaml:"wrap"`      // pointer so we can detect unset vs false
-	TabSize   *int   `yaml:"tabSize"`   // pointer so we can detect unset vs 0
-	MaxWidth  int    `yaml:"maxWidth"`
-	MaxHeight int    `yaml:"maxHeight"`
-	SafeAnsi  *bool  `yaml:"safeAnsi"` // pointer so we can detect unset vs false
+	Title     string                   `yaml:"title"`
+	Theme     string                   `yaml:"theme"`
+	Aspect    string                   `yaml:"aspect"`    // target aspect ratio, e.g. "16:9" or "4:3"
+	Wrap      *bool                    `yaml:"wrap"`      // pointer so we can detect unset vs false
+	TabSize   *int                     `yaml:"tabSize"`   // pointer so we can detect unset vs 0
+	MaxWidth  int                      `yaml:"maxWidth"`
+	MaxHeight int                      `yaml:"maxHeight"`
+	SafeAnsi  *bool                    `yaml:"safeAnsi"`  // pointer so we can detect unset vs false
+	Layouts   map[string]CustomLayout  `yaml:"layouts"`   // user-defined or overridden layouts
+}
+
+// CustomLayout defines a user-configurable grid layout.
+// Columns and Rows define the grid cell sizes as percentages.
+// - columns only → single-row, N columns
+// - rows only → single-column, N rows
+// - both → len(columns) × len(rows) grid (row-major order)
+type CustomLayout struct {
+	Columns []int  `yaml:"columns"` // column widths as percentages, e.g. [30, 70]
+	Rows    []int  `yaml:"rows"`    // row heights as percentages, e.g. [60, 40]
+	Gutter  *int   `yaml:"gutter"`  // gap between cells in characters (default: 2)
+	PadX    *int   `yaml:"padX"`    // horizontal padding override
+	PadY    *int   `yaml:"padY"`    // vertical padding override
+	Align   Align  `yaml:"align"`   // content alignment within cells
+}
+
+// GetGutter returns the effective gutter value (default 2).
+func (cl CustomLayout) GetGutter() int {
+	if cl.Gutter == nil {
+		return 2
+	}
+	return *cl.Gutter
+}
+
+// GetPadX returns the padX override, or -1 if unset.
+func (cl CustomLayout) GetPadX() int {
+	if cl.PadX == nil {
+		return -1
+	}
+	return *cl.PadX
+}
+
+// GetPadY returns the padY override, or -1 if unset.
+func (cl CustomLayout) GetPadY() int {
+	if cl.PadY == nil {
+		return -1
+	}
+	return *cl.PadY
 }
 
 // DeckMetaDefaults returns a DeckMeta with default values applied.
