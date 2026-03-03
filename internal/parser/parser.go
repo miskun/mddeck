@@ -67,6 +67,16 @@ func Parse(content string) (*model.Deck, error) {
 	// Split remaining content into slides
 	slideTexts := splitSlides(lines, pos)
 
+	// If no --- slide breaks were found (only one "slide" returned),
+	// try header-based splitting à la patat: find the most deeply nested
+	// header level and split on it. Headers above that level become title slides.
+	if len(slideTexts) <= 1 && len(slideTexts) == 1 {
+		headerSlides := splitSlidesByHeaders(slideTexts[0])
+		if len(headerSlides) > 1 {
+			slideTexts = headerSlides
+		}
+	}
+
 	for i, text := range slideTexts {
 		slide, err := parseSlide(text, i)
 		if err != nil {
@@ -176,6 +186,182 @@ func isSlideBreak(lines []string, idx int, start int) bool {
 	}
 
 	return hasAfter
+}
+
+// splitSlidesByHeaders implements patat-style header-based slide splitting.
+// When a file contains no --- slide breaks, headers are used instead:
+//   - Find the most deeply nested header level (the "split level")
+//   - Each occurrence of that header starts a new slide
+//   - Headers above the split level also start a new slide and become title slides
+//   - A YAML frontmatter block (--- / key: val / ---) also starts a new slide
+//
+// For example, if the deepest header is ## (h2):
+//   - # Title     → starts a new title slide
+//   - ## Content   → starts a new content slide
+//   - ### Sub      → stays within the current slide
+//   - ---\nlayout: two-col\n--- → starts a new slide with that layout
+func splitSlidesByHeaders(content string) []string {
+	lines := strings.Split(content, "\n")
+
+	// Find the deepest (most nested) header level used.
+	deepest := 0
+	inFence := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		level := headerLevel(trimmed)
+		if level > 0 && level > deepest {
+			deepest = level
+		}
+	}
+
+	hasFM := false
+	for i := range lines {
+		if _, ok := isSlideFrontmatter(lines, i); ok {
+			hasFM = true
+			break
+		}
+	}
+
+	if deepest == 0 && !hasFM {
+		// No headers or frontmatter found — can't split
+		return []string{content}
+	}
+
+	// Split on headers at or above the deepest level, and on frontmatter blocks.
+	var slides []string
+	var current []string
+	inFence = false
+	headersToSkip := 0
+
+	i := 0
+	for i < len(lines) {
+		trimmed := strings.TrimSpace(lines[i])
+		if strings.HasPrefix(trimmed, "```") {
+			inFence = !inFence
+			current = append(current, lines[i])
+			i++
+			continue
+		}
+		if inFence {
+			current = append(current, lines[i])
+			i++
+			continue
+		}
+
+		// Check for slide frontmatter block (--- / yaml / ---)
+		if endFM, ok := isSlideFrontmatter(lines, i); ok {
+			// Flush current content as a slide
+			text := strings.Join(current, "\n")
+			text = strings.TrimRight(text, "\n ")
+			if strings.TrimSpace(text) != "" {
+				slides = append(slides, text)
+			}
+
+			// Determine how many subsequent headers belong to this
+			// frontmatter slide (multi-section layouts like two-col
+			// and split need 2 headers; others need 1).
+			fmYAML := strings.Join(lines[i+1:endFM], "\n")
+			headersToSkip = 1
+			if strings.Contains(fmYAML, "two-col") || strings.Contains(fmYAML, "split") {
+				headersToSkip = 2
+			}
+
+			// Start new slide with the frontmatter block
+			current = nil
+			for j := i; j <= endFM; j++ {
+				current = append(current, lines[j])
+			}
+			i = endFM + 1
+			continue
+		}
+
+		// Check for header split
+		level := headerLevel(trimmed)
+		if level > 0 && deepest > 0 && level <= deepest {
+			if headersToSkip > 0 {
+				// This header belongs to the preceding frontmatter slide.
+				headersToSkip--
+				current = append(current, lines[i])
+				i++
+				continue
+			}
+			// This header starts a new slide.
+			text := strings.Join(current, "\n")
+			text = strings.TrimRight(text, "\n ")
+			if strings.TrimSpace(text) != "" {
+				slides = append(slides, text)
+			}
+			current = nil
+		}
+
+		current = append(current, lines[i])
+		i++
+	}
+
+	// Last slide
+	text := strings.Join(current, "\n")
+	text = strings.TrimRight(text, "\n ")
+	if strings.TrimSpace(text) != "" {
+		slides = append(slides, text)
+	}
+
+	return slides
+}
+
+// isSlideFrontmatter checks if lines[idx] starts a YAML frontmatter block.
+// Returns the index of the closing --- and true, or (0, false).
+// A frontmatter block is: ---, followed by at least one YAML line with ":",
+// followed by a closing ---.
+func isSlideFrontmatter(lines []string, idx int) (endIdx int, ok bool) {
+	if idx >= len(lines) || strings.TrimSpace(lines[idx]) != "---" {
+		return 0, false
+	}
+	// Look for closing ---
+	hasYAML := false
+	for j := idx + 1; j < len(lines) && j-idx <= 20; j++ {
+		trimmed := strings.TrimSpace(lines[j])
+		if trimmed == "---" {
+			if hasYAML {
+				return j, true
+			}
+			return 0, false // empty block, not frontmatter
+		}
+		if strings.Contains(trimmed, ":") {
+			hasYAML = true
+		}
+	}
+	return 0, false
+}
+
+// headerLevel returns the heading level (1-6) for a markdown heading line,
+// or 0 if the line is not a heading.
+func headerLevel(line string) int {
+	if !strings.HasPrefix(line, "#") {
+		return 0
+	}
+	level := 0
+	for _, ch := range line {
+		if ch == '#' {
+			level++
+		} else {
+			break
+		}
+	}
+	if level > 6 {
+		return 0
+	}
+	// Must be followed by a space or be just "#"s
+	if len(line) > level && line[level] != ' ' {
+		return 0
+	}
+	return level
 }
 
 // parseSlide parses a single slide's text into a Slide.

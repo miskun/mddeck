@@ -154,11 +154,16 @@ align: top
 }
 
 func TestHeadings(t *testing.T) {
+	// Use --- slide breaks to prevent header-based splitting
 	input := `# H1
 
 ## H2
 
-### H3`
+### H3
+
+---
+
+Slide two`
 
 	deck, err := Parse(input)
 	if err != nil {
@@ -414,5 +419,203 @@ More text`
 	}
 	if !found {
 		t.Error("expected horizontal rule block inside slide")
+	}
+}
+
+func TestHeaderBasedSplitting(t *testing.T) {
+	input := `# Introduction
+
+Welcome to the talk.
+
+## First Topic
+
+Some content here.
+
+## Second Topic
+
+More content here.
+`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Deepest header is ## (h2), so splits happen on # and ##.
+	// # Introduction → slide 1
+	// ## First Topic → slide 2
+	// ## Second Topic → slide 3
+	if len(deck.Slides) != 3 {
+		for i, s := range deck.Slides {
+			t.Logf("slide %d: %d blocks", i, len(s.Blocks))
+			for _, b := range s.Blocks {
+				t.Logf("  type=%d level=%d raw=%q", b.Type, b.Level, b.Raw)
+			}
+		}
+		t.Fatalf("got %d slides, want 3", len(deck.Slides))
+	}
+
+	// First slide should contain the H1 heading
+	if deck.Slides[0].Blocks[0].Type != model.BlockHeading || deck.Slides[0].Blocks[0].Level != 1 {
+		t.Errorf("slide 1 should start with H1, got type=%d level=%d", deck.Slides[0].Blocks[0].Type, deck.Slides[0].Blocks[0].Level)
+	}
+
+	// Second slide should start with H2
+	if deck.Slides[1].Blocks[0].Type != model.BlockHeading || deck.Slides[1].Blocks[0].Level != 2 {
+		t.Errorf("slide 2 should start with H2, got type=%d level=%d", deck.Slides[1].Blocks[0].Type, deck.Slides[1].Blocks[0].Level)
+	}
+
+	// Third slide should contain H2 and H3
+	if deck.Slides[2].Blocks[0].Type != model.BlockHeading || deck.Slides[2].Blocks[0].Level != 2 {
+		t.Errorf("slide 3 should start with H2, got type=%d level=%d", deck.Slides[2].Blocks[0].Type, deck.Slides[2].Blocks[0].Level)
+	}
+}
+
+func TestHeaderSplittingNotUsedWithHR(t *testing.T) {
+	// When --- slide breaks exist, header splitting should NOT activate
+	input := `# Slide One
+
+Some text.
+
+---
+
+# Slide Two
+
+More text.
+`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(deck.Slides) != 2 {
+		t.Fatalf("got %d slides, want 2", len(deck.Slides))
+	}
+}
+
+func TestHeaderSplittingOnlyH1(t *testing.T) {
+	// Only H1 headers — deepest is 1, so each H1 is a slide
+	input := `# First
+
+Hello.
+
+# Second
+
+World.
+`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(deck.Slides) != 2 {
+		t.Fatalf("got %d slides, want 2", len(deck.Slides))
+	}
+}
+
+func TestHeaderSplittingNoHeaders(t *testing.T) {
+	// No headers at all — should remain a single slide
+	input := `Just some text.
+
+More text here.
+`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(deck.Slides) != 1 {
+		t.Fatalf("got %d slides, want 1", len(deck.Slides))
+	}
+}
+
+func TestFrontmatterAsSlideBreak(t *testing.T) {
+	// Mix of header-based splitting and frontmatter blocks.
+	// No --- slide breaks, so header splitting activates.
+	// Frontmatter blocks should also start new slides.
+	input := `## Slide One
+
+First content.
+
+## Slide Two
+
+Second content.
+
+---
+layout: two-col
+ratio: "50/50"
+---
+
+## Left Column
+
+Left text.
+
+## Right Column
+
+Right text.
+
+## Slide Four
+
+Back to normal.
+`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Expect: Slide One, Slide Two, two-col slide (Left+Right), Slide Four
+	if len(deck.Slides) != 4 {
+		t.Fatalf("got %d slides, want 4", len(deck.Slides))
+	}
+
+	// Slide 1: normal header slide
+	if len(deck.Slides[0].Blocks) == 0 {
+		t.Error("slide 1 should have blocks")
+	}
+
+	// Slide 3: should have two-col layout from frontmatter
+	if deck.Slides[2].Meta.Layout != model.LayoutTwoCol {
+		t.Errorf("slide 3 layout = %v, want two-col", deck.Slides[2].Meta.Layout)
+	}
+
+	// Slide 4: back to normal
+	if len(deck.Slides[3].Blocks) == 0 {
+		t.Error("slide 4 should have blocks")
+	}
+}
+
+func TestFrontmatterOnlyNoHeaders(t *testing.T) {
+	// File with frontmatter blocks but no headers at all.
+	// Should still split on frontmatter.
+	input := `Some introductory text.
+
+---
+layout: terminal
+---
+
+Terminal content here.
+
+---
+layout: center
+---
+
+Centered content.
+`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(deck.Slides) != 3 {
+		t.Fatalf("got %d slides, want 3", len(deck.Slides))
+	}
+
+	if deck.Slides[1].Meta.Layout != model.LayoutTerminal {
+		t.Errorf("slide 2 layout = %v, want terminal", deck.Slides[1].Meta.Layout)
 	}
 }
