@@ -777,8 +777,16 @@ func parseUnorderedList(lines []string, i int) (model.Block, int) {
 			}
 			break
 		} else if strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "\t") {
-			// Continuation of current item
-			currentItem += " " + trimmed
+			// Continuation of current item (indented)
+			if strings.HasSuffix(currentItem, "\\") {
+				// Trailing backslash = hard line break
+				currentItem = strings.TrimSuffix(currentItem, "\\") + "\n" + trimmed
+			} else {
+				currentItem += " " + trimmed
+			}
+		} else if currentItem != "" && strings.HasSuffix(currentItem, "\\") {
+			// Trailing backslash absorbs next line as continuation regardless of indent
+			currentItem = strings.TrimSuffix(currentItem, "\\") + "\n" + trimmed
 		} else {
 			break
 		}
@@ -860,7 +868,14 @@ func parseOrderedList(lines []string, i int) (model.Block, int) {
 			}
 			break
 		} else if strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "\t") {
-			currentItem += " " + trimmed
+			if strings.HasSuffix(currentItem, "\\") {
+				currentItem = strings.TrimSuffix(currentItem, "\\") + "\n" + trimmed
+			} else {
+				currentItem += " " + trimmed
+			}
+		} else if currentItem != "" && strings.HasSuffix(currentItem, "\\") {
+			// Trailing backslash absorbs next line as continuation regardless of indent
+			currentItem = strings.TrimSuffix(currentItem, "\\") + "\n" + trimmed
 		} else {
 			break
 		}
@@ -923,6 +938,7 @@ func parseTable(lines []string, i int) (model.Block, int) {
 	var tableLines []string
 	j := i
 	headerSepSeen := false
+	noHeader := false
 
 	for j < len(lines) {
 		trimmed := strings.TrimSpace(lines[j])
@@ -931,6 +947,10 @@ func parseTable(lines []string, i int) (model.Block, int) {
 		}
 		if isTableSeparator(trimmed) {
 			if !headerSepSeen {
+				if len(tableLines) == 0 {
+					// Separator before any data row — headerless table
+					noHeader = true
+				}
 				// Skip the first separator (standard header separator)
 				headerSepSeen = true
 			} else {
@@ -944,9 +964,10 @@ func parseTable(lines []string, i int) (model.Block, int) {
 	}
 
 	return model.Block{
-		Type:  model.BlockTable,
-		Raw:   strings.Join(tableLines, "\n"),
-		Lines: tableLines,
+		Type:     model.BlockTable,
+		Raw:      strings.Join(tableLines, "\n"),
+		Lines:    tableLines,
+		NoHeader: noHeader,
 	}, j
 }
 

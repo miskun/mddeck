@@ -30,14 +30,15 @@ const (
 type DeckMeta struct {
 	Title     string                   `yaml:"title"`
 	Theme     string                   `yaml:"theme"`
-	Aspect    string                   `yaml:"aspect"`    // target aspect ratio, e.g. "16:9" or "4:3"
-	Wrap      *bool                    `yaml:"wrap"`      // pointer so we can detect unset vs false
-	TabSize   *int                     `yaml:"tabSize"`   // pointer so we can detect unset vs 0
+	Aspect    string                   `yaml:"aspect"`     // target aspect ratio, e.g. "16:9" or "4:3"
+	Wrap      *bool                    `yaml:"wrap"`       // pointer so we can detect unset vs false
+	TabSize   *int                     `yaml:"tabSize"`    // pointer so we can detect unset vs 0
+	LineWidth *int                     `yaml:"lineWidth"`  // max content width in chars (default 78, 0 = unlimited)
 	MaxWidth  int                      `yaml:"maxWidth"`
 	MaxHeight int                      `yaml:"maxHeight"`
-	SafeAnsi  *bool                    `yaml:"safeAnsi"`  // pointer so we can detect unset vs false
-	Layouts   map[string]CustomLayout  `yaml:"layouts"`   // user-defined or overridden layouts
-	Footer    Footer                   `yaml:"footer"`    // configurable footer sections
+	SafeAnsi  *bool                    `yaml:"safeAnsi"`   // pointer so we can detect unset vs false
+	Layouts   map[string]CustomLayout  `yaml:"layouts"`    // user-defined or overridden layouts
+	Footer    Footer                   `yaml:"footer"`     // configurable footer sections
 }
 
 // Footer defines the three sections of the slide footer bar.
@@ -123,6 +124,16 @@ func (d DeckMeta) GetSafeAnsi() bool {
 	return *d.SafeAnsi
 }
 
+// GetLineWidth returns the effective line width.
+// Default is 100 (balanced for readability and multi-column layouts).
+// A value of 0 means unlimited (no content width cap).
+func (d DeckMeta) GetLineWidth() int {
+	if d.LineWidth == nil {
+		return 80
+	}
+	return *d.LineWidth
+}
+
 // SlideMeta holds per-slide frontmatter.
 type SlideMeta struct {
 	Layout    Layout `yaml:"layout"`
@@ -176,6 +187,7 @@ type Block struct {
 	Language string   // fenced code block language
 	Lines    []string // individual lines (for lists, blockquotes)
 	Children []Block  // nested blocks (for blockquotes)
+	NoHeader bool     // table without header row
 }
 
 // IsArtBlock returns true if this block is an art block (ansi, ascii, braille).

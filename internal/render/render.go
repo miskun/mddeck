@@ -38,6 +38,29 @@ func (r *Renderer) RenderSlide(slide *model.Slide, vp layout.Viewport) []string 
 	lr := layout.ComputeLayout(slide, vp, &r.Deck.Meta)
 	scr := newScreenBuf(vp.Width, vp.Height)
 
+	// Configure padding background with content stage bounds
+	if r.Theme.PadBg != "" && len(lr.Regions) > 0 {
+		stageL := lr.Regions[0].X
+		stageT := lr.Regions[0].Y
+		stageR := lr.Regions[0].X + lr.Regions[0].Width
+		stageB := lr.Regions[0].Y + lr.Regions[0].Height
+		for _, reg := range lr.Regions[1:] {
+			if reg.X < stageL {
+				stageL = reg.X
+			}
+			if reg.Y < stageT {
+				stageT = reg.Y
+			}
+			if reg.X+reg.Width > stageR {
+				stageR = reg.X + reg.Width
+			}
+			if reg.Y+reg.Height > stageB {
+				stageB = reg.Y + reg.Height
+			}
+		}
+		scr.SetPadding(r.Theme.PadBg, stageL, stageT, stageR, stageB)
+	}
+
 	switch lr.Mode {
 	case model.LayoutTitle:
 		r.renderTitle(slide, lr.Regions[0], scr)
@@ -315,18 +338,27 @@ func (r *Renderer) renderUnorderedList(block model.Block, width int) []string {
 		bullet := r.Theme.Accent + bullets[bulletIdx] + a.Reset
 		prefixWidth := 2*(depth+1) + 2 // indentation + bullet
 
-		if r.Wrap && width > prefixWidth {
-			wrapped := wrapText(text, width-prefixWidth)
-			for j, wl := range wrapped {
-				styled := r.applyInlineStyles(wl)
-				if j == 0 {
+		// Split on hard line breaks (embedded newlines from trailing backslash)
+		subLines := strings.Split(text, "\n")
+		for si, sub := range subLines {
+			if r.Wrap && width > prefixWidth {
+				wrapped := wrapText(sub, width-prefixWidth)
+				for j, wl := range wrapped {
+					styled := r.applyInlineStyles(wl)
+					if si == 0 && j == 0 {
+						lines = append(lines, indent+bullet+styled)
+					} else {
+						lines = append(lines, indent+"  "+styled)
+					}
+				}
+			} else {
+				styled := r.applyInlineStyles(sub)
+				if si == 0 {
 					lines = append(lines, indent+bullet+styled)
 				} else {
 					lines = append(lines, indent+"  "+styled)
 				}
 			}
-		} else {
-			lines = append(lines, indent+bullet+r.applyInlineStyles(text))
 		}
 	}
 	return lines
@@ -351,18 +383,27 @@ func (r *Renderer) renderOrderedList(block model.Block, width int) []string {
 		prefix := indent + num
 		prefixWidth := 2*(depth+1) + 3 // indentation + "N. "
 
-		if r.Wrap && width > prefixWidth {
-			wrapped := wrapText(text, width-prefixWidth)
-			for j, wl := range wrapped {
-				styled := r.applyInlineStyles(wl)
-				if j == 0 {
+		// Split on hard line breaks (embedded newlines from trailing backslash)
+		subLines := strings.Split(text, "\n")
+		for si, sub := range subLines {
+			if r.Wrap && width > prefixWidth {
+				wrapped := wrapText(sub, width-prefixWidth)
+				for j, wl := range wrapped {
+					styled := r.applyInlineStyles(wl)
+					if si == 0 && j == 0 {
+						lines = append(lines, prefix+styled)
+					} else {
+						lines = append(lines, strings.Repeat(" ", prefixWidth)+styled)
+					}
+				}
+			} else {
+				styled := r.applyInlineStyles(sub)
+				if si == 0 {
 					lines = append(lines, prefix+styled)
 				} else {
 					lines = append(lines, strings.Repeat(" ", prefixWidth)+styled)
 				}
 			}
-		} else {
-			lines = append(lines, prefix+r.applyInlineStyles(text))
 		}
 	}
 	return lines
@@ -394,15 +435,15 @@ func (r *Renderer) renderBlockquote(block model.Block, width int) []string {
 func (r *Renderer) alertStyle(alertType string) (string, string) {
 	switch alertType {
 	case "NOTE":
-		return "▪", a.FgBrightBlue
+		return "▪", r.Theme.AlertNote
 	case "TIP":
-		return "▪", a.FgBrightGreen
+		return "▪", r.Theme.AlertTip
 	case "IMPORTANT":
-		return "▪", a.FgBrightMagenta
+		return "▪", r.Theme.AlertImportant
 	case "WARNING":
-		return "▪", a.FgBrightYellow
+		return "▪", r.Theme.AlertWarning
 	case "CAUTION":
-		return "▪", a.FgBrightRed
+		return "▪", r.Theme.AlertCaution
 	default:
 		return "ℹ", r.Theme.Accent
 	}
@@ -579,6 +620,7 @@ func (r *Renderer) renderTable(block model.Block, width int) []string {
 
 	var lines []string
 	isFirstDataRow := true
+	hasHeader := !block.NoHeader
 
 	// Top border: ┌──┬──┐
 	lines = append(lines, r.tableHLine("┌", "┬", "┐", colWidths, maxCols))
@@ -597,12 +639,12 @@ func (r *Renderer) renderTable(block model.Block, width int) []string {
 			styled := r.applyInlineStyles(cell)
 			visLen := a.VisibleLen(styled)
 			if visLen > colWidths[c] {
-				styled = a.Truncate(styled, colWidths[c])
-				visLen = colWidths[c]
+				styled = a.TruncateEllipsis(styled, colWidths[c])
+				visLen = a.VisibleLen(styled)
 			}
 			pad := strings.Repeat(" ", colWidths[c]-visLen)
 
-			if isFirstDataRow {
+			if isFirstDataRow && hasHeader {
 				// Header row: bold
 				line += " " + a.Bold + styled + a.Reset + pad + " " + r.Theme.Muted + "│" + a.Reset
 			} else {
@@ -612,10 +654,10 @@ func (r *Renderer) renderTable(block model.Block, width int) []string {
 		lines = append(lines, line)
 
 		// After header row: separator ├──┼──┤
-		if isFirstDataRow {
+		if isFirstDataRow && hasHeader {
 			lines = append(lines, r.tableHLine("├", "┼", "┤", colWidths, maxCols))
-			isFirstDataRow = false
 		}
+		isFirstDataRow = false
 	}
 
 	// Bottom border: └──┴──┘

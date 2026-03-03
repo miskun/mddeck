@@ -2,6 +2,7 @@
 package ansi
 
 import (
+	"os"
 	"regexp"
 	"strings"
 )
@@ -103,6 +104,22 @@ func Truncate(s string, maxVis int) string {
 	return buf.String()
 }
 
+// TruncateEllipsis truncates an ANSI-styled string to maxVis visible
+// characters and appends "…" if the string was truncated.
+func TruncateEllipsis(s string, maxVis int) string {
+	if maxVis <= 0 {
+		return ""
+	}
+	vl := VisibleLen(s)
+	if vl <= maxVis {
+		return s
+	}
+	if maxVis <= 1 {
+		return "…"
+	}
+	return Truncate(s, maxVis-1) + "…"
+}
+
 // Common ANSI escape codes for styling.
 const (
 	Reset         = "\x1b[0m"
@@ -166,14 +183,117 @@ func Bg256(n int) string {
 	return "\x1b[48;5;" + itoa(n) + "m"
 }
 
-// FgRGB returns a 24-bit true-color foreground escape.
+// FgRGB returns a foreground color escape for the given RGB values.
+// If the terminal supports 24-bit true color, emits \x1b[38;2;r;g;bm.
+// Otherwise, approximates to the nearest 256-color palette entry.
 func FgRGB(r, g, b int) string {
-	return "\x1b[38;2;" + itoa(r) + ";" + itoa(g) + ";" + itoa(b) + "m"
+	if hasTrueColor() {
+		return "\x1b[38;2;" + itoa(r) + ";" + itoa(g) + ";" + itoa(b) + "m"
+	}
+	return Fg256(rgbTo256(r, g, b))
 }
 
-// BgRGB returns a 24-bit true-color background escape.
+// BgRGB returns a background color escape for the given RGB values.
+// If the terminal supports 24-bit true color, emits \x1b[48;2;r;g;bm.
+// Otherwise, approximates to the nearest 256-color palette entry.
 func BgRGB(r, g, b int) string {
-	return "\x1b[48;2;" + itoa(r) + ";" + itoa(g) + ";" + itoa(b) + "m"
+	if hasTrueColor() {
+		return "\x1b[48;2;" + itoa(r) + ";" + itoa(g) + ";" + itoa(b) + "m"
+	}
+	return Bg256(rgbTo256(r, g, b))
+}
+
+// trueColorSupport caches the result of true-color detection.
+var trueColorSupport *bool
+
+// hasTrueColor checks whether the terminal supports 24-bit true color.
+// Checks COLORTERM for "truecolor" or "24bit".
+func hasTrueColor() bool {
+	if trueColorSupport != nil {
+		return *trueColorSupport
+	}
+	ct := strings.ToLower(os.Getenv("COLORTERM"))
+	result := ct == "truecolor" || ct == "24bit"
+	trueColorSupport = &result
+	return result
+}
+
+// rgbTo256 converts an RGB color to the nearest xterm 256-color palette index.
+func rgbTo256(r, g, b int) int {
+	// Check if it's close to a greyscale ramp entry (232-255)
+	// 24 shades from grey8 (#080808) to grey93 (#eeeeee)
+	if r == g && g == b {
+		if r < 8 {
+			return 16 // black
+		}
+		if r > 238 {
+			return 231 // white
+		}
+		return 232 + (r-8)*24/230
+	}
+
+	// Map to the 6x6x6 color cube (indices 16-231)
+	ri := colorCubeIndex(r)
+	gi := colorCubeIndex(g)
+	bi := colorCubeIndex(b)
+	cubeIdx := 16 + 36*ri + 6*gi + bi
+
+	// Also check the nearest greyscale entry
+	grey := (r + g + b) / 3
+	var greyIdx int
+	if grey < 8 {
+		greyIdx = 16
+	} else if grey > 238 {
+		greyIdx = 231
+	} else {
+		greyIdx = 232 + (grey-8)*24/230
+	}
+
+	// Compare which is closer: cube or greyscale
+	cubeDist := colorDist(r, g, b, cubeIdx)
+	greyDist := colorDist(r, g, b, greyIdx)
+
+	if greyDist < cubeDist {
+		return greyIdx
+	}
+	return cubeIdx
+}
+
+// colorCubeIndex maps a 0-255 channel value to a 6-level cube index.
+func colorCubeIndex(v int) int {
+	// The 6 cube levels are: 0, 95, 135, 175, 215, 255
+	if v < 48 {
+		return 0
+	}
+	if v < 115 {
+		return 1
+	}
+	return (v-35)/40 // maps 115→2, 155→3, 195→4, 235→5
+}
+
+// cubeLevels are the RGB values for each of the 6 color cube indices.
+var cubeLevels = [6]int{0, 95, 135, 175, 215, 255}
+
+// colorDist returns the squared distance between an RGB color and a 256-palette entry.
+func colorDist(r, g, b, idx int) int {
+	var pr, pg, pb int
+	if idx < 16 {
+		// Standard colors — rough approximation
+		return 1<<30 - 1 // large distance, prefer cube/grey
+	} else if idx < 232 {
+		ci := idx - 16
+		pr = cubeLevels[ci/36]
+		pg = cubeLevels[(ci%36)/6]
+		pb = cubeLevels[ci%6]
+	} else {
+		// Greyscale ramp: 232-255
+		g := 8 + (idx-232)*10
+		pr, pg, pb = g, g, g
+	}
+	dr := r - pr
+	dg := g - pg
+	db := b - pb
+	return dr*dr + dg*dg + db*db
 }
 
 // CursorTo moves cursor to given row, col (1-based).

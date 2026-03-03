@@ -147,12 +147,20 @@ func ComputeLayout(slide *model.Slide, vp Viewport, deckMeta *model.DeckMeta) La
 		}
 	}
 
-	return computeGrid(def, layout, vp, aspectPadX, aspectPadY)
+	// Read line width cap (default 78, 0 = unlimited)
+	lineWidth := 0
+	if deckMeta != nil {
+		lineWidth = deckMeta.GetLineWidth()
+	}
+
+	return computeGrid(def, layout, vp, aspectPadX, aspectPadY, lineWidth, aspect)
 }
 
 // computeGrid creates a grid layout from a CustomLayout definition.
 // This is the single layout engine used by all layouts — built-in and custom.
-func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, aspectPadX, aspectPadY int) LayoutResult {
+// lineWidth caps the total content stage width (0 = unlimited).
+// aspect is used to derive the maximum content height when lineWidth caps the width.
+func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, aspectPadX, aspectPadY, lineWidth int, aspect string) LayoutResult {
 	gutter := def.GetGutter()
 
 	// Determine padding.
@@ -163,6 +171,25 @@ func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, aspectP
 
 	usableW := vp.Width - 2*padX
 	usableH := vp.Height - 2*padY - 1 // reserve status bar row
+
+	// Cap content width to lineWidth and center the content stage
+	if lineWidth > 0 && usableW > lineWidth {
+		extra := usableW - lineWidth
+		padX += extra / 2
+		usableW = lineWidth
+	}
+
+	// Cap content height to maintain aspect ratio with the (possibly capped) width.
+	// targetRatio = 2*W/H (accounting for ~1:2 character cell aspect).
+	// maxH = usableW / targetRatio = usableW * den / (2 * num)
+	if num, den, ok := parseAspect(aspect); ok {
+		maxH := usableW * den / (2 * num)
+		if maxH > 0 && usableH > maxH {
+			extra := usableH - maxH
+			padY += extra / 2
+			usableH = maxH
+		}
+	}
 
 	if usableW < 1 {
 		usableW = 1

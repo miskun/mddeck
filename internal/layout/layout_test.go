@@ -179,7 +179,7 @@ func TestCustomGridLayout2x1(t *testing.T) {
 		Rows:    []int{100},
 	}
 	vp := Viewport{Width: 100, Height: 30}
-	result := computeGrid(custom, "twocol", vp, 0, 0)
+	result := computeGrid(custom, "twocol", vp, 0, 0, 0, "")
 
 	if len(result.Regions) != 2 {
 		t.Fatalf("regions = %d, want 2", len(result.Regions))
@@ -205,7 +205,7 @@ func TestCustomGridLayout2x2(t *testing.T) {
 		Rows:    []int{50, 50},
 	}
 	vp := Viewport{Width: 100, Height: 30}
-	result := computeGrid(custom, "grid", vp, 0, 0)
+	result := computeGrid(custom, "grid", vp, 0, 0, 0, "")
 
 	if len(result.Regions) != 4 {
 		t.Fatalf("regions = %d, want 4", len(result.Regions))
@@ -263,5 +263,124 @@ func TestDistributeSpace(t *testing.T) {
 	}
 	if sizes[1] != 40 {
 		t.Errorf("sizes[1] = %d, want 40", sizes[1])
+	}
+}
+
+func TestLineWidthCapsContentStage(t *testing.T) {
+	// Wide terminal (160 cols), lineWidth caps content to 78
+	custom := model.CustomLayout{
+		Columns: []int{100},
+		Rows:    []int{100},
+	}
+	vp := Viewport{Width: 160, Height: 40}
+
+	// Without cap
+	uncapped := computeGrid(custom, "auto", vp, 0, 0, 0, "")
+	// With 78-char cap
+	capped := computeGrid(custom, "auto", vp, 0, 0, 78, "16:9")
+
+	// Uncapped region should be wider than capped
+	if uncapped.Regions[0].Width <= capped.Regions[0].Width {
+		t.Errorf("uncapped width %d should be > capped width %d",
+			uncapped.Regions[0].Width, capped.Regions[0].Width)
+	}
+
+	// Capped region width should be exactly 78
+	if capped.Regions[0].Width != 78 {
+		t.Errorf("capped width = %d, want 78", capped.Regions[0].Width)
+	}
+
+	// Content should be centered: X offset = (160 - 78) / 2
+	wantX := (160 - 78) / 2
+	if capped.Regions[0].X != wantX {
+		t.Errorf("capped X = %d, want %d (centered)", capped.Regions[0].X, wantX)
+	}
+}
+
+func TestLineWidthNarrowTerminal(t *testing.T) {
+	// Narrow terminal (60 cols) — lineWidth 78 should have no effect
+	custom := model.CustomLayout{
+		Columns: []int{100},
+	}
+	vp := Viewport{Width: 60, Height: 30}
+
+	result := computeGrid(custom, "auto", vp, 0, 0, 78, "16:9")
+	// With default padX=2, usableW = 60 - 4 = 56, which is < 78 → no capping
+	if result.Regions[0].Width != 56 {
+		t.Errorf("width = %d, want 56 (no capping on narrow terminal)", result.Regions[0].Width)
+	}
+}
+
+func TestLineWidthWithMultipleColumns(t *testing.T) {
+	// Two columns within a 78-char stage
+	custom := model.CustomLayout{
+		Columns: []int{50, 50},
+	}
+	vp := Viewport{Width: 160, Height: 40}
+
+	result := computeGrid(custom, "cols-2", vp, 0, 0, 78, "16:9")
+
+	// Both regions should be within the 78-char stage
+	leftEnd := result.Regions[0].X + result.Regions[0].Width
+	rightStart := result.Regions[1].X
+	rightEnd := result.Regions[1].X + result.Regions[1].Width
+
+	stageLeft := result.Regions[0].X
+	stageRight := rightEnd
+
+	stageWidth := stageRight - stageLeft
+	// Stage should be ≤ 78 (may be less due to gutter)
+	if stageWidth > 78 {
+		t.Errorf("total stage width %d exceeds lineWidth 78", stageWidth)
+	}
+
+	// Right column should start after left + gutter
+	if rightStart <= leftEnd {
+		t.Errorf("right column X %d should be > left end %d", rightStart, leftEnd)
+	}
+}
+
+func TestAspectRatioHeightCap(t *testing.T) {
+	// With lineWidth 78 and 16:9, height should be capped.
+	// maxH = 78 * 9 / (2 * 16) = 21
+	custom := model.CustomLayout{
+		Columns: []int{100},
+		Rows:    []int{100},
+	}
+	vp := Viewport{Width: 160, Height: 40}
+
+	result := computeGrid(custom, "auto", vp, 0, 0, 78, "16:9")
+
+	if result.Regions[0].Width != 78 {
+		t.Errorf("width = %d, want 78", result.Regions[0].Width)
+	}
+
+	wantH := 78 * 9 / (2 * 16) // = 21
+	if result.Regions[0].Height != wantH {
+		t.Errorf("height = %d, want %d (aspect-ratio capped)", result.Regions[0].Height, wantH)
+	}
+
+	// Content should be vertically centered
+	// Original: padY=1, usableH=40-2-1=37, maxH=21, extra=16, padY=1+8=9
+	if result.Regions[0].Y != 9 {
+		t.Errorf("Y = %d, want 9 (vertically centered)", result.Regions[0].Y)
+	}
+}
+
+func TestNoHeightCapWithoutLineWidth(t *testing.T) {
+	// Without lineWidth cap, aspect ratio height capping should not reduce
+	// height from what the viewport provides (aspect padding handles it).
+	custom := model.CustomLayout{
+		Columns: []int{100},
+	}
+	vp := Viewport{Width: 100, Height: 30}
+
+	// No lineWidth cap, no aspect padding
+	result := computeGrid(custom, "auto", vp, 0, 0, 0, "16:9")
+
+	// usableW = 100-4 = 96, maxH = 96*9/32 = 27
+	// usableH = 30-2-1 = 27 → exactly at the cap, so no extra padding
+	if result.Regions[0].Height != 27 {
+		t.Errorf("height = %d, want 27", result.Regions[0].Height)
 	}
 }
