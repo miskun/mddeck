@@ -69,6 +69,40 @@ func VisibleLen(text string) int {
 	return count
 }
 
+// Truncate truncates styled text to maxVis visible characters, preserving
+// all ANSI escape sequences. Guarantees the result has at most maxVis visible
+// characters, so rows never exceed viewport width and cause terminal auto-wrap.
+func Truncate(s string, maxVis int) string {
+	if maxVis <= 0 {
+		return ""
+	}
+	var buf strings.Builder
+	vis := 0
+	inEsc := false
+
+	for _, r := range s {
+		if inEsc {
+			buf.WriteRune(r)
+			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+				inEsc = false
+			}
+			continue
+		}
+		if r == '\x1b' {
+			buf.WriteRune(r)
+			inEsc = true
+			continue
+		}
+		if vis >= maxVis {
+			break
+		}
+		buf.WriteRune(r)
+		vis++
+	}
+
+	return buf.String()
+}
+
 // Common ANSI escape codes for styling.
 const (
 	Reset     = "\x1b[0m"
@@ -110,9 +144,15 @@ const (
 
 	// Cursor/screen control
 	ClearScreen = "\x1b[2J"
+	EraseLine   = "\x1b[2K"
 	CursorHome  = "\x1b[H"
 	HideCursor  = "\x1b[?25l"
 	ShowCursor  = "\x1b[?25h"
+
+	// Synchronized output (DEC mode 2026) — tells the terminal to
+	// hold display updates until the full frame is received.
+	BeginSync = "\x1b[?2026h"
+	EndSync   = "\x1b[?2026l"
 )
 
 // Fg256 returns a 256-color foreground escape.

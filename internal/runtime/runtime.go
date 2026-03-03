@@ -4,10 +4,9 @@ package runtime
 import (
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
+	a "github.com/miskun/mddeck/internal/ansi"
 	"github.com/miskun/mddeck/internal/layout"
 	"github.com/miskun/mddeck/internal/model"
 	"github.com/miskun/mddeck/internal/render"
@@ -35,6 +34,14 @@ type Runtime struct {
 	prevMode  Mode // mode before help overlay
 	startTime time.Time
 	running   bool
+
+	// Channel for resize events
+	resizeCh chan struct{}
+
+	// Previous frame for diff-based rendering
+	prevLines  []string
+	prevWidth  int
+	prevHeight int
 
 	// Terminal state
 	oldState *term.State
@@ -66,6 +73,7 @@ func New(deck *model.Deck, cfg Config) *Runtime {
 		Theme:     th,
 		Renderer:  render.NewRenderer(deck, th),
 		startTime: time.Now(),
+		resizeCh:  make(chan struct{}, 1),
 	}
 
 	if cfg.Presenter {
@@ -90,41 +98,60 @@ func (rt *Runtime) Run() error {
 
 	defer rt.cleanup()
 
-	// Handle SIGINT, SIGTERM, SIGWINCH
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGWINCH)
+	// Start platform-specific resize watcher (writes to rt.resizeCh)
+	rt.watchResize()
 
-	// Hide cursor
-	fmt.Print("\x1b[?25l")
+	// Enter alternate screen buffer (prevents reflow on resize) and hide cursor
+	fmt.Print("\x1b[?1049h\x1b[?25l")
 
 	rt.running = true
 	rt.render()
 
-	// Input buffer for escape sequences
-	buf := make([]byte, 32)
+	// Read input in a goroutine so we can also receive resize events
+	inputCh := make(chan []byte, 1)
+	go func() {
+		buf := make([]byte, 32)
+		for {
+			n, err := os.Stdin.Read(buf)
+			if err != nil {
+				close(inputCh)
+				return
+			}
+			data := make([]byte, n)
+			copy(data, buf[:n])
+			inputCh <- data
+		}
+	}()
+
+	// Debounce timer for resize events — coalesce rapid SIGWINCH bursts.
+	// We wait until no new resize arrives for 50ms, then render. This avoids
+	// the race where we measure terminal size, the terminal resizes again
+	// mid-render, and our output wraps at the wrong width.
+	var resizeTimer *time.Timer
+	resizeTimerCh := make(<-chan time.Time)
 
 	for rt.running {
-		// Check for signals (non-blocking)
 		select {
-		case sig := <-sigCh:
-			switch sig {
-			case syscall.SIGINT, syscall.SIGTERM:
+		case data, ok := <-inputCh:
+			if !ok {
 				rt.running = false
 				continue
-			case syscall.SIGWINCH:
-				rt.render()
-				continue
 			}
-		default:
+			rt.handleInput(data)
+		case <-rt.resizeCh:
+			// Reset debounce timer on each resize event
+			if resizeTimer != nil {
+				resizeTimer.Stop()
+			}
+			resizeTimer = time.NewTimer(100 * time.Millisecond)
+			resizeTimerCh = resizeTimer.C
+			// Invalidate previous frame so debounce-triggered render
+			// does a full redraw (no stale diff state)
+			rt.prevLines = nil
+		case <-resizeTimerCh:
+			resizeTimerCh = make(<-chan time.Time) // disarm
+			rt.render()
 		}
-
-		// Read input
-		n, err := os.Stdin.Read(buf)
-		if err != nil {
-			break
-		}
-
-		rt.handleInput(buf[:n])
 	}
 
 	return nil
@@ -132,10 +159,8 @@ func (rt *Runtime) Run() error {
 
 // cleanup restores terminal state.
 func (rt *Runtime) cleanup() {
-	// Show cursor
-	fmt.Print("\x1b[?25h")
-	// Clear screen
-	fmt.Print("\x1b[2J\x1b[H")
+	// Show cursor and leave alternate screen buffer (restores original content)
+	fmt.Print("\x1b[?25h\x1b[?1049l")
 	// Restore terminal
 	if rt.oldState != nil {
 		term.Restore(int(os.Stdin.Fd()), rt.oldState)
@@ -269,23 +294,43 @@ func (rt *Runtime) togglePresenter() {
 	rt.render()
 }
 
-// render draws the current state to the terminal.
+// render draws the current state to the terminal using diff-based updates.
+// Only lines that differ from the previous frame are written, minimizing
+// terminal I/O and eliminating flicker.
 func (rt *Runtime) render() {
 	vp := rt.getViewport()
 	slide := &rt.Deck.Slides[rt.current]
 
-	var output string
+	var lines []string
+	var baseFg string
 	switch rt.mode {
 	case ModePresenter:
 		elapsed := rt.formatElapsed()
-		output = rt.Renderer.RenderPresenter(slide, vp, elapsed)
+		lines = rt.Renderer.RenderPresenter(slide, vp, elapsed)
+		baseFg = rt.Renderer.Theme.Fg
 	case ModeHelp:
-		output = rt.Renderer.RenderHelp(vp)
+		lines = rt.Renderer.RenderHelp(vp)
 	default:
-		output = rt.Renderer.RenderSlide(slide, vp)
+		lines = rt.Renderer.RenderSlide(slide, vp)
+		baseFg = rt.Renderer.Theme.Fg
 	}
 
-	fmt.Print(output)
+	var output string
+	if rt.prevWidth != vp.Width || rt.prevHeight != vp.Height || rt.prevLines == nil {
+		// Viewport changed or first render: write full frame sequentially
+		output = render.RenderFull(lines, baseFg)
+	} else {
+		// Same viewport: diff against previous frame
+		output = render.RenderDiff(rt.prevLines, lines, baseFg, vp.Width)
+	}
+
+	rt.prevLines = lines
+	rt.prevWidth = vp.Width
+	rt.prevHeight = vp.Height
+
+	// Wrap in synchronized output markers and write as a single syscall
+	buf := a.BeginSync + output + a.EndSync
+	os.Stdout.Write([]byte(buf))
 }
 
 // getViewport returns the current terminal dimensions.

@@ -33,38 +33,38 @@ func NewRenderer(deck *model.Deck, th theme.Theme) *Renderer {
 	}
 }
 
-// RenderSlide renders a single slide into a buffer of positioned lines.
-func (r *Renderer) RenderSlide(slide *model.Slide, vp layout.Viewport) string {
+// RenderSlide renders a single slide and returns composed lines for diff-based output.
+func (r *Renderer) RenderSlide(slide *model.Slide, vp layout.Viewport) []string {
 	lr := layout.ComputeLayout(slide, vp)
-	var buf strings.Builder
-
-	// Clear screen and set base colors
-	buf.WriteString(a.ClearScreen)
-	buf.WriteString(a.CursorHome)
-	buf.WriteString(r.Theme.Fg)
+	scr := newScreenBuf(vp.Width, vp.Height)
 
 	switch lr.Mode {
 	case model.LayoutTitle:
-		r.renderTitle(slide, lr.Regions[0], &buf)
+		r.renderTitle(slide, lr.Regions[0], scr)
 	case model.LayoutTwoCol:
-		r.renderTwoCol(slide, lr, &buf)
+		r.renderTwoCol(slide, lr, scr)
 	case model.LayoutSplit:
-		r.renderSplitLayout(slide, lr, &buf)
+		r.renderSplitLayout(slide, lr, scr)
 	case model.LayoutTerminal:
-		r.renderSingleRegion(slide.Blocks, lr.Regions[0], &buf)
+		r.renderSingleRegion(slide.Blocks, lr.Regions[0], scr)
 	default: // center
-		r.renderSingleRegion(slide.Blocks, lr.Regions[0], &buf)
+		r.renderSingleRegion(slide.Blocks, lr.Regions[0], scr)
 	}
 
-	// Render status bar
-	r.renderStatusBar(slide, vp, &buf)
+	// Status bar: place into screen buffer so it's part of the line diff
+	total := len(r.Deck.Slides)
+	status := fmt.Sprintf(" %d / %d ", slide.Index+1, total)
+	statusCol := vp.Width - len(status)
+	if statusCol < 0 {
+		statusCol = 0
+	}
+	scr.Set(vp.Height-1, statusCol, r.Theme.SlideNumStyle+status+a.Reset)
 
-	buf.WriteString(a.Reset)
-	return buf.String()
+	return scr.Lines()
 }
 
 // renderTitle renders a title-layout slide (centered vertically and horizontally).
-func (r *Renderer) renderTitle(slide *model.Slide, region layout.Region, buf *strings.Builder) {
+func (r *Renderer) renderTitle(slide *model.Slide, region layout.Region, scr *screenBuf) {
 	lines := r.renderBlocks(slide.Blocks, region.Width)
 
 	// Center vertically
@@ -78,19 +78,20 @@ func (r *Renderer) renderTitle(slide *model.Slide, region layout.Region, buf *st
 			break
 		}
 		row := startY + i
+		// Crop to region width to prevent terminal auto-wrap
+		line = r.cropLine(line, region.Width)
 		// Center horizontally
 		visLen := a.VisibleLen(line)
 		padLeft := (region.Width - visLen) / 2
 		if padLeft < 0 {
 			padLeft = 0
 		}
-		buf.WriteString(a.CursorTo(row+1, region.X+padLeft+1))
-		buf.WriteString(line)
+		scr.Set(row, region.X+padLeft, line)
 	}
 }
 
 // renderTwoCol renders a two-column layout.
-func (r *Renderer) renderTwoCol(slide *model.Slide, lr layout.LayoutResult, buf *strings.Builder) {
+func (r *Renderer) renderTwoCol(slide *model.Slide, lr layout.LayoutResult, scr *screenBuf) {
 	majors := layout.SplitBlocksIntoMajor(slide.Blocks)
 
 	// Distribute major blocks alternately
@@ -119,14 +120,14 @@ func (r *Renderer) renderTwoCol(slide *model.Slide, lr layout.LayoutResult, buf 
 		leftBlocks = leftBlocks[:mid]
 	}
 
-	r.renderInRegion(leftBlocks, lr.Regions[0], buf)
+	r.renderInRegion(leftBlocks, lr.Regions[0], scr)
 	if len(lr.Regions) > 1 {
-		r.renderInRegion(rightBlocks, lr.Regions[1], buf)
+		r.renderInRegion(rightBlocks, lr.Regions[1], scr)
 	}
 }
 
 // renderSplitLayout renders a split (top/bottom) layout.
-func (r *Renderer) renderSplitLayout(slide *model.Slide, lr layout.LayoutResult, buf *strings.Builder) {
+func (r *Renderer) renderSplitLayout(slide *model.Slide, lr layout.LayoutResult, scr *screenBuf) {
 	majors := layout.SplitBlocksIntoMajor(slide.Blocks)
 
 	var topBlocks, bottomBlocks []model.Block
@@ -138,37 +139,37 @@ func (r *Renderer) renderSplitLayout(slide *model.Slide, lr layout.LayoutResult,
 		bottomBlocks = append(bottomBlocks, maj.Content...)
 	}
 
-	r.renderInRegion(topBlocks, lr.Regions[0], buf)
+	r.renderInRegion(topBlocks, lr.Regions[0], scr)
 	if len(lr.Regions) > 1 {
-		r.renderInRegion(bottomBlocks, lr.Regions[1], buf)
+		r.renderInRegion(bottomBlocks, lr.Regions[1], scr)
 	}
 }
 
 // renderSingleRegion renders all blocks into a single region.
-func (r *Renderer) renderSingleRegion(blocks []model.Block, region layout.Region, buf *strings.Builder) {
-	r.renderInRegion(blocks, region, buf)
+func (r *Renderer) renderSingleRegion(blocks []model.Block, region layout.Region, scr *screenBuf) {
+	r.renderInRegion(blocks, region, scr)
 }
 
 // renderInRegion renders blocks within a specific region.
-func (r *Renderer) renderInRegion(blocks []model.Block, region layout.Region, buf *strings.Builder) {
+func (r *Renderer) renderInRegion(blocks []model.Block, region layout.Region, scr *screenBuf) {
 	lines := r.renderBlocks(blocks, region.Width)
-
-	// Apply vertical alignment
 	startY := region.Y
-	if len(lines) < region.Height {
-		// Default is top-aligned, handled by startY = region.Y
+
+	overflow := len(lines) > region.Height
+	limit := region.Height
+	if overflow {
+		limit = region.Height - 1 // leave last row for overflow indicator
+	}
+	if limit > len(lines) {
+		limit = len(lines)
 	}
 
-	for i, line := range lines {
-		if i >= region.Height {
-			// Vertical overflow indicator
-			buf.WriteString(a.CursorTo(region.Y+region.Height, region.X+1))
-			buf.WriteString(r.Theme.Muted + "↓" + a.Reset)
-			break
-		}
-		buf.WriteString(a.CursorTo(startY+i+1, region.X+1))
-		rendered := r.cropLine(line, region.Width)
-		buf.WriteString(rendered)
+	for i := 0; i < limit; i++ {
+		scr.Set(startY+i, region.X, r.cropLine(lines[i], region.Width))
+	}
+
+	if overflow {
+		scr.Set(startY+region.Height-1, region.X, r.Theme.Muted+"↓"+a.Reset)
 	}
 }
 
@@ -236,12 +237,16 @@ func (r *Renderer) renderHeading(block model.Block, width int) []string {
 
 // renderParagraph renders a paragraph with optional wrapping.
 func (r *Renderer) renderParagraph(block model.Block, width int) []string {
-	text := r.applyInlineStyles(block.Raw)
-
 	if r.Wrap && width > 0 {
-		return wrapText(text, width)
+		// Wrap raw text first, then apply inline styles to each line.
+		// This prevents wrapText from stripping ANSI codes.
+		wrapped := wrapText(block.Raw, width)
+		for i, line := range wrapped {
+			wrapped[i] = r.applyInlineStyles(line)
+		}
+		return wrapped
 	}
-	return []string{text}
+	return []string{r.applyInlineStyles(block.Raw)}
 }
 
 // renderUnorderedList renders an unordered list.
@@ -250,20 +255,18 @@ func (r *Renderer) renderUnorderedList(block model.Block, width int) []string {
 	bullet := r.Theme.Accent + r.Theme.BulletChar + a.Reset
 
 	for _, item := range block.Lines {
-		text := r.applyInlineStyles(item)
-		itemLine := "  " + bullet + text
-
 		if r.Wrap && width > 4 {
-			wrapped := wrapText(text, width-4)
+			wrapped := wrapText(item, width-4)
 			for j, wl := range wrapped {
+				styled := r.applyInlineStyles(wl)
 				if j == 0 {
-					lines = append(lines, "  "+bullet+wl)
+					lines = append(lines, "  "+bullet+styled)
 				} else {
-					lines = append(lines, "    "+wl) // hanging indent
+					lines = append(lines, "    "+styled)
 				}
 			}
 		} else {
-			lines = append(lines, itemLine)
+			lines = append(lines, "  "+bullet+r.applyInlineStyles(item))
 		}
 	}
 	return lines
@@ -275,22 +278,21 @@ func (r *Renderer) renderOrderedList(block model.Block, width int) []string {
 
 	for i, item := range block.Lines {
 		num := fmt.Sprintf("%s%d.%s ", r.Theme.Accent, i+1, a.Reset)
-		text := r.applyInlineStyles(item)
-
 		prefix := "  " + num
 		prefixWidth := 5 // "  N. "
 
 		if r.Wrap && width > prefixWidth {
-			wrapped := wrapText(text, width-prefixWidth)
+			wrapped := wrapText(item, width-prefixWidth)
 			for j, wl := range wrapped {
+				styled := r.applyInlineStyles(wl)
 				if j == 0 {
-					lines = append(lines, prefix+wl)
+					lines = append(lines, prefix+styled)
 				} else {
-					lines = append(lines, strings.Repeat(" ", prefixWidth)+wl)
+					lines = append(lines, strings.Repeat(" ", prefixWidth)+styled)
 				}
 			}
 		} else {
-			lines = append(lines, prefix+text)
+			lines = append(lines, prefix+r.applyInlineStyles(item))
 		}
 	}
 	return lines
@@ -339,15 +341,6 @@ func (r *Renderer) renderArtBlock(block model.Block) []string {
 func (r *Renderer) renderHR(width int) []string {
 	hr := r.Theme.HRStyle + strings.Repeat("─", width) + a.Reset
 	return []string{hr}
-}
-
-// renderStatusBar draws the slide number at the bottom.
-func (r *Renderer) renderStatusBar(slide *model.Slide, vp layout.Viewport, buf *strings.Builder) {
-	total := len(r.Deck.Slides)
-	status := fmt.Sprintf(" %d / %d ", slide.Index+1, total)
-
-	buf.WriteString(a.CursorTo(vp.Height, vp.Width-len(status)))
-	buf.WriteString(r.Theme.SlideNumStyle + status + a.Reset)
 }
 
 // Inline style patterns
@@ -412,20 +405,26 @@ func wrapText(text string, width int) []string {
 	return lines
 }
 
-// cropLine truncates a line if it exceeds the width.
+// padRight pads a rendered line with spaces so it fills the full width,
+// preventing leftover characters from a previous wider render.
+func (r *Renderer) padRight(line string, width int) string {
+	vis := a.VisibleLen(line)
+	if vis >= width {
+		return line
+	}
+	return line + strings.Repeat(" ", width-vis)
+}
+
+// cropLine truncates a line if it exceeds the width, preserving ANSI styling.
 func (r *Renderer) cropLine(line string, width int) string {
 	visLen := a.VisibleLen(line)
 	if visLen <= width {
 		return line
 	}
-
-	// Need to truncate while keeping ANSI sequences intact
-	clean := a.StripAll(line)
-	runes := []rune(clean)
-	if len(runes) > width-1 {
-		return string(runes[:width-1]) + "…"
+	if width <= 1 {
+		return "…"
 	}
-	return line
+	return a.Truncate(line, width-1) + "…" + a.Reset
 }
 
 // expandTabs replaces tabs with spaces.
@@ -433,16 +432,11 @@ func (r *Renderer) expandTabs(line string) string {
 	return strings.ReplaceAll(line, "\t", strings.Repeat(" ", r.TabSize))
 }
 
-// RenderPresenter renders the presenter view with current slide, next preview,
-// notes, timer, and slide index.
-func (r *Renderer) RenderPresenter(slide *model.Slide, vp layout.Viewport, elapsed string) string {
-	var buf strings.Builder
+// RenderPresenter renders the presenter view and returns composed lines.
+func (r *Renderer) RenderPresenter(slide *model.Slide, vp layout.Viewport, elapsed string) []string {
+	scr := newScreenBuf(vp.Width, vp.Height)
 
-	buf.WriteString(a.ClearScreen)
-	buf.WriteString(a.CursorHome)
-	buf.WriteString(r.Theme.Fg)
-
-	// Layout: top 60% = current slide, bottom 40% split into next preview + notes
+	// Layout: top 55% = current slide, bottom = next preview + notes
 	topH := vp.Height * 55 / 100
 	bottomH := vp.Height - topH - 2 // 2 lines for divider and status
 
@@ -460,15 +454,13 @@ func (r *Renderer) RenderPresenter(slide *model.Slide, vp layout.Viewport, elaps
 			if i >= currentRegion.Height {
 				break
 			}
-			buf.WriteString(a.CursorTo(currentRegion.Y+i+1, currentRegion.X+1))
-			buf.WriteString(r.cropLine(line, currentRegion.Width))
+			scr.Set(currentRegion.Y+i, currentRegion.X, r.cropLine(line, currentRegion.Width))
 		}
 	}
 
 	// Divider
-	dividerY := topH + 1
-	buf.WriteString(a.CursorTo(dividerY, 1))
-	buf.WriteString(r.Theme.HRStyle + strings.Repeat("─", vp.Width) + a.Reset)
+	dividerRow := topH // 0-based
+	scr.Set(dividerRow, 0, r.Theme.HRStyle+strings.Repeat("─", vp.Width)+a.Reset)
 
 	// Bottom: left = next preview, right = notes
 	notesWidth := vp.Width / 2
@@ -478,45 +470,44 @@ func (r *Renderer) RenderPresenter(slide *model.Slide, vp layout.Viewport, elaps
 	total := len(r.Deck.Slides)
 	if slide.Index+1 < total {
 		nextSlide := &r.Deck.Slides[slide.Index+1]
-		buf.WriteString(a.CursorTo(dividerY+1, 1))
-		buf.WriteString(r.Theme.Muted + "Next:" + a.Reset)
+		scr.Set(dividerRow+1, 0, r.Theme.Muted+"Next:"+a.Reset)
 
 		nextLines := r.renderBlocks(nextSlide.Blocks, previewWidth-2)
 		for i, line := range nextLines {
 			if i >= bottomH-1 {
 				break
 			}
-			buf.WriteString(a.CursorTo(dividerY+2+i, 2))
-			buf.WriteString(r.Theme.Muted + r.cropLine(line, previewWidth-2) + a.Reset)
+			scr.Set(dividerRow+2+i, 1, r.Theme.Muted+r.cropLine(line, previewWidth-2)+a.Reset)
 		}
 	}
 
 	// Notes
 	if slide.Notes != "" {
-		buf.WriteString(a.CursorTo(dividerY+1, previewWidth+2))
-		buf.WriteString(r.Theme.NotesStyle + "Notes:" + a.Reset)
+		scr.Set(dividerRow+1, previewWidth+1, r.Theme.NotesStyle+"Notes:"+a.Reset)
 
 		noteLines := strings.Split(slide.Notes, "\n")
 		for i, line := range noteLines {
 			if i >= bottomH-1 {
 				break
 			}
-			buf.WriteString(a.CursorTo(dividerY+2+i, previewWidth+2))
-			buf.WriteString(r.Theme.NotesStyle + r.cropLine(line, notesWidth-1) + a.Reset)
+			scr.Set(dividerRow+2+i, previewWidth+1, r.Theme.NotesStyle+r.cropLine(line, notesWidth-1)+a.Reset)
 		}
 	}
 
-	// Status bar: timer + slide index
+	// Status bar into screen buffer
 	statusLine := fmt.Sprintf(" %s  │  %d / %d ", elapsed, slide.Index+1, total)
-	buf.WriteString(a.CursorTo(vp.Height, vp.Width-utf8.RuneCountInString(statusLine)))
-	buf.WriteString(r.Theme.TimerStyle + statusLine + a.Reset)
+	statusCol := vp.Width - utf8.RuneCountInString(statusLine)
+	if statusCol < 0 {
+		statusCol = 0
+	}
+	scr.Set(vp.Height-1, statusCol, r.Theme.TimerStyle+statusLine+a.Reset)
 
-	return buf.String()
+	return scr.Lines()
 }
 
-// RenderHelp renders the help overlay.
-func (r *Renderer) RenderHelp(vp layout.Viewport) string {
-	var buf strings.Builder
+// RenderHelp renders the help overlay and returns composed lines.
+func (r *Renderer) RenderHelp(vp layout.Viewport) []string {
+	scr := newScreenBuf(vp.Width, vp.Height)
 
 	helpLines := []string{
 		"",
@@ -535,21 +526,19 @@ func (r *Renderer) RenderHelp(vp layout.Viewport) string {
 		"",
 	}
 
-	buf.WriteString(a.ClearScreen)
-	buf.WriteString(a.CursorHome)
-
 	startY := (vp.Height - len(helpLines)) / 2
 	if startY < 0 {
 		startY = 0
 	}
 
 	for i, line := range helpLines {
-		buf.WriteString(a.CursorTo(startY+i+1, 1))
-		buf.WriteString(r.Theme.HelpStyle + line + a.Reset)
+		if startY+i >= vp.Height {
+			break
+		}
+		scr.Set(startY+i, 0, r.Theme.HelpStyle+line+a.Reset)
 	}
 
-	buf.WriteString(a.CursorTo(vp.Height, 1))
-	buf.WriteString(r.Theme.Muted + "  Press any key to dismiss" + a.Reset)
+	scr.Set(vp.Height-1, 0, r.Theme.Muted+"  Press any key to dismiss"+a.Reset)
 
-	return buf.String()
+	return scr.Lines()
 }
