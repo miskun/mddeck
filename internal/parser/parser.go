@@ -67,15 +67,20 @@ func Parse(content string) (*model.Deck, error) {
 	// Split remaining content into slides
 	slideTexts := splitSlides(lines, pos)
 
-	// If no --- slide breaks were found (only one "slide" returned),
-	// try header-based splitting à la patat: find the most deeply nested
-	// header level and split on it. Headers above that level become title slides.
-	if len(slideTexts) <= 1 && len(slideTexts) == 1 {
-		headerSlides := splitSlidesByHeaders(slideTexts[0], deck.Meta.Layouts)
+	// Apply header-based splitting (à la patat) to each chunk produced by
+	// splitSlides.  This handles files that mix --- slide breaks with ##
+	// header-based splitting: each ---separated chunk is further split on
+	// headers when it contains more than one at the deepest level.
+	var expanded []string
+	for _, st := range slideTexts {
+		headerSlides := splitSlidesByHeaders(st, deck.Meta.Layouts)
 		if len(headerSlides) > 1 {
-			slideTexts = headerSlides
+			expanded = append(expanded, headerSlides...)
+		} else {
+			expanded = append(expanded, st)
 		}
 	}
+	slideTexts = expanded
 
 	for i, text := range slideTexts {
 		slide, err := parseSlide(text, i)

@@ -154,25 +154,28 @@ align: top
 }
 
 func TestHeadings(t *testing.T) {
-	// Use --- slide breaks to prevent header-based splitting
+	// Headers are split into separate slides by header-based splitting.
+	// The deepest header level is ### (h3), so #, ##, ### each start a slide.
 	input := `# H1
 
 ## H2
 
 ### H3
-
----
-
-Slide two`
+`
 
 	deck, err := Parse(input)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	blocks := deck.Slides[0].Blocks
-	if len(blocks) != 3 {
-		t.Fatalf("blocks = %d, want 3", len(blocks))
+	if len(deck.Slides) != 3 {
+		for i, s := range deck.Slides {
+			t.Logf("slide %d: %d blocks", i, len(s.Blocks))
+			for _, b := range s.Blocks {
+				t.Logf("  type=%d level=%d raw=%q", b.Type, b.Level, b.Raw)
+			}
+		}
+		t.Fatalf("slides = %d, want 3", len(deck.Slides))
 	}
 
 	tests := []struct {
@@ -185,14 +188,15 @@ Slide two`
 	}
 
 	for i, tt := range tests {
-		if blocks[i].Type != model.BlockHeading {
-			t.Errorf("block[%d].Type = %v, want BlockHeading", i, blocks[i].Type)
+		block := deck.Slides[i].Blocks[0]
+		if block.Type != model.BlockHeading {
+			t.Errorf("slide[%d] block.Type = %v, want BlockHeading", i, block.Type)
 		}
-		if blocks[i].Level != tt.level {
-			t.Errorf("block[%d].Level = %d, want %d", i, blocks[i].Level, tt.level)
+		if block.Level != tt.level {
+			t.Errorf("slide[%d] block.Level = %d, want %d", i, block.Level, tt.level)
 		}
-		if blocks[i].Raw != tt.text {
-			t.Errorf("block[%d].Raw = %q, want %q", i, blocks[i].Raw, tt.text)
+		if block.Raw != tt.text {
+			t.Errorf("slide[%d] block.Raw = %q, want %q", i, block.Raw, tt.text)
 		}
 	}
 }
@@ -471,8 +475,9 @@ More content here.
 	}
 }
 
-func TestHeaderSplittingNotUsedWithHR(t *testing.T) {
-	// When --- slide breaks exist, header splitting should NOT activate
+func TestHeaderSplittingWithHR(t *testing.T) {
+	// Each --- chunk is independently header-split.
+	// Both chunks have only H1 (deepest=1), so each H1 stays as one slide.
 	input := `# Slide One
 
 Some text.
@@ -491,6 +496,60 @@ More text.
 
 	if len(deck.Slides) != 2 {
 		t.Fatalf("got %d slides, want 2", len(deck.Slides))
+	}
+}
+
+func TestMixedHRAndHeaderSplitting(t *testing.T) {
+	// First chunk has # and ## headers — header splitting produces 3 slides.
+	// Second chunk (after ---) has no headers — stays as 1 slide.
+	// Total: 4 slides.
+	input := `# Title
+
+Intro text.
+
+## Topic A
+
+Content A.
+
+## Topic B
+
+Content B.
+
+---
+
+Just a plain slide.
+`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(deck.Slides) != 4 {
+		for i, s := range deck.Slides {
+			t.Logf("slide %d: %d blocks", i, len(s.Blocks))
+			for _, b := range s.Blocks {
+				t.Logf("  type=%d level=%d raw=%q", b.Type, b.Level, b.Raw)
+			}
+		}
+		t.Fatalf("got %d slides, want 4", len(deck.Slides))
+	}
+
+	// Slide 0: # Title + paragraph
+	if deck.Slides[0].Blocks[0].Raw != "Title" {
+		t.Errorf("slide 0 heading = %q, want %q", deck.Slides[0].Blocks[0].Raw, "Title")
+	}
+	// Slide 1: ## Topic A + paragraph
+	if deck.Slides[1].Blocks[0].Raw != "Topic A" {
+		t.Errorf("slide 1 heading = %q, want %q", deck.Slides[1].Blocks[0].Raw, "Topic A")
+	}
+	// Slide 2: ## Topic B + paragraph
+	if deck.Slides[2].Blocks[0].Raw != "Topic B" {
+		t.Errorf("slide 2 heading = %q, want %q", deck.Slides[2].Blocks[0].Raw, "Topic B")
+	}
+	// Slide 3: plain text
+	if deck.Slides[3].Blocks[0].Raw != "Just a plain slide." {
+		t.Errorf("slide 3 text = %q, want %q", deck.Slides[3].Blocks[0].Raw, "Just a plain slide.")
 	}
 }
 
