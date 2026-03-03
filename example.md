@@ -1,7 +1,5 @@
 ---
 title: "Markdown in mddeck"
-theme: "default"
-wrap: true
 ---
 
 # Markdown in mddeck
