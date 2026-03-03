@@ -130,6 +130,10 @@ func (rt *Runtime) Run() error {
 	var resizeTimer *time.Timer
 	resizeTimerCh := make(<-chan time.Time)
 
+	// 1-second ticker to update the elapsed timer in presenter mode.
+	timerTick := time.NewTicker(1 * time.Second)
+	defer timerTick.Stop()
+
 	for rt.running {
 		select {
 		case data, ok := <-inputCh:
@@ -151,6 +155,10 @@ func (rt *Runtime) Run() error {
 		case <-resizeTimerCh:
 			resizeTimerCh = make(<-chan time.Time) // disarm
 			rt.render()
+		case <-timerTick.C:
+			if rt.mode == ModePresenter {
+				rt.render()
+			}
 		}
 	}
 
