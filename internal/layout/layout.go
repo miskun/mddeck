@@ -56,6 +56,19 @@ func builtinLayouts() map[string]model.CustomLayout {
 			Columns: []int{100},
 			PadY:    intPtr(1),
 		},
+		"sidebar": {
+			Columns: []int{30, 70},
+			PadY:    intPtr(1),
+		},
+		"thirds": {
+			Columns: []int{33, 34, 33},
+			PadY:    intPtr(1),
+		},
+		"quad": {
+			Columns: []int{50, 50},
+			Rows:    []int{50, 50},
+			PadY:    intPtr(1),
+		},
 	}
 }
 
@@ -117,11 +130,12 @@ func ComputeLayout(slide *model.Slide, vp Viewport, deckMeta *model.DeckMeta) La
 		layout = autoDetect(slide)
 	}
 
-	// Compute aspect-ratio-based padding
-	aspectPadX, aspectPadY := 0, 0
+	// Compute aspect-ratio-based padding (default: 16:9)
+	aspect := "16:9"
 	if deckMeta != nil && deckMeta.Aspect != "" {
-		aspectPadX, aspectPadY = computeAspectPadding(deckMeta.Aspect, vp)
+		aspect = deckMeta.Aspect
 	}
+	aspectPadX, aspectPadY := computeAspectPadding(aspect, vp)
 
 	// Resolve layout definition (builtin, overridden, or custom)
 	def := resolveLayout(string(layout), deckMeta)

@@ -80,13 +80,13 @@ func TestTwoColRatio(t *testing.T) {
 	leftW := result.Regions[0].Width
 	rightW := result.Regions[1].Width
 
-	// No aspect set → padX = 2 each side → 96 usable, minus gutter 2 = 94
-	// 70/30 of 94 → ~66/28
-	if leftW < 60 || leftW > 75 {
-		t.Errorf("left width = %d, expected ~66", leftW)
+	// Default aspect 16:9 with 100x24 → aspectPadX ≈ 7 each side → 86 usable
+	// minus gutter 2 = 84, 70/30 of 84 → ~59/25
+	if leftW < 50 || leftW > 65 {
+		t.Errorf("left width = %d, expected ~59", leftW)
 	}
-	if rightW < 20 || rightW > 35 {
-		t.Errorf("right width = %d, expected ~28", rightW)
+	if rightW < 18 || rightW > 32 {
+		t.Errorf("right width = %d, expected ~25", rightW)
 	}
 }
 

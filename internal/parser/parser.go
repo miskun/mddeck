@@ -412,8 +412,13 @@ func computeHeadersToSkip(fmYAML string, layouts map[string]model.CustomLayout) 
 	}
 
 	// Built-in multi-region layouts
-	if layoutName == "two-col" || layoutName == "split" {
+	switch layoutName {
+	case "two-col", "split", "sidebar":
 		return 2
+	case "thirds":
+		return 3
+	case "quad":
+		return 4
 	}
 
 	// Other built-in layouts (title, default, center, terminal)

@@ -12,6 +12,9 @@ const (
 	LayoutTwoCol   Layout = "two-col"
 	LayoutSplit    Layout = "split"
 	LayoutTerminal Layout = "terminal"
+	LayoutSidebar  Layout = "sidebar"
+	LayoutThirds   Layout = "thirds"
+	LayoutQuad     Layout = "quad"
 )
 
 // Align represents vertical alignment within a layout region.

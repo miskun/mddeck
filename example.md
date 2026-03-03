@@ -2,17 +2,6 @@
 title: "Markdown in mddeck"
 theme: "default"
 wrap: true
-aspect: "16:9"
-layouts:
-  sidebar:
-    columns: [30, 70]
-    gutter: 3
-  thirds:
-    columns: [33, 34, 33]
-  quad:
-    columns: [50, 50]
-    rows: [50, 50]
-    gutter: 1
 ---
 
 # Markdown in mddeck
