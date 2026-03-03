@@ -138,7 +138,7 @@ Right content.
 This slide splits on the header again.
 ```
 
-When a frontmatter block specifies `layout: two-col` or `layout: split`, two subsequent headers are absorbed into that slide (for the two regions). Other layouts absorb one header.
+The parser automatically absorbs the correct number of headers based on region count. For example, `two-col` and `sidebar` absorb 2 headers, `thirds` absorbs 3, `quad` absorbs 4. Single-region layouts absorb 1 header. Custom layouts compute regions as cols × rows.
 
 ### Disabling Auto-Split (`autosplit: false`)
 
@@ -196,10 +196,30 @@ tabSize: 2
 | `maxWidth` | int | `0` (auto) | Maximum viewport width |
 | `maxHeight` | int | `0` (auto) | Maximum viewport height |
 | `safeAnsi` | bool | `true` | Strip non-SGR ANSI sequences |
-| `aspect` | string | `""` | Target aspect ratio (e.g. `"16:9"`, `"4:3"`) |
+| `aspect` | string | `"16:9"` | Target aspect ratio (e.g. `"16:9"`, `"4:3"`) |
+| `footer` | object | `{}` | Footer bar configuration (see below) |
 | `layouts` | map | `{}` | Custom layout definitions |
 
 Unknown fields are silently ignored.
+
+#### Footer
+
+The footer bar spans the bottom row of each slide. Configure it with up to three sections:
+
+```yaml
+---
+footer:
+  left: "Company Name"
+  center: "Confidential"
+  right: "Custom text"
+---
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `left` | string | `""` | Left-aligned text |
+| `center` | string | `""` | Centered text |
+| `right` | string | slide counter | Right-aligned text (defaults to `N / M`) |
 
 ### Slide Frontmatter
 
@@ -224,7 +244,7 @@ align: top
 | `class` | string | `""` | Style class |
 | `autosplit` | bool | `true` | Enable header-based splitting within this slide |
 
-**Layout values:** `auto`, `default`, `title`, `center`, `two-col`, `split`, `terminal`
+**Layout values:** `auto`, `default`, `title`, `center`, `two-col`, `split`, `terminal`, `sidebar`, `thirds`, `quad`
 
 **Align values:** `top`, `middle`, `bottom`
 
@@ -378,15 +398,20 @@ All layouts — built-in and custom — use the same grid engine. Built-in layou
 
 ### Built-in Layouts
 
-| Layout | Grid | Padding | Description |
-|--------|------|---------|-------------|
-| `auto` | (detected) | — | Automatically detected from content |
-| `default` | 1×1 | padX: W/8, padY: 1 | Proportional horizontal padding, top-aligned |
-| `title` | 1×1 | padX: 0, padY: 0 | Centered title slide (large heading) |
-| `center` | 1×1 | padX: W/8, padY: 0 | Content centered vertically and horizontally |
-| `two-col` | 2×1 (62/38) | padX: 0, padY: 1 | Two columns, gutter: 2 |
-| `split` | 1×2 (60/40) | padX: 2, padY: 1 | Top/bottom split, gutter: 1 |
-| `terminal` | 1×1 | padX: 2, padY: 1 | Minimal padding for code/art |
+All built-in layouts use the same defaults: horizontal padding from aspect ratio, vertical padding of 1, and gutter of 2. No special-case overrides — they behave identically to custom layouts.
+
+| Layout | Grid | Description |
+|--------|------|-------------|
+| `auto` | (detected) | Automatically detected from content |
+| `default` | 1×1 | Standard single-region, top-aligned |
+| `title` | 1×1 | Centered title slide (large heading) |
+| `center` | 1×1 | Content centered vertically and horizontally |
+| `two-col` | 2×1 (62/38) | Two columns |
+| `split` | 1×2 (60/40) | Top/bottom split |
+| `terminal` | 1×1 | Single region for code/art |
+| `sidebar` | 2×1 (30/70) | Narrow left panel, wide right panel |
+| `thirds` | 3×1 (33/34/33) | Three equal columns |
+| `quad` | 2×2 (50/50 × 50/50) | Four equal quadrants |
 
 ### Auto-Detection Heuristics
 
@@ -412,15 +437,17 @@ ratio: "50/50"
 
 ### Aspect Ratio
 
-Set `aspect` in deck frontmatter to constrain the slide area to a target aspect ratio. Padding is added automatically to letterbox or pillarbox the content.
+The default aspect ratio is `16:9`. Override it in deck frontmatter:
 
 ```yaml
 ---
-aspect: "16:9"
+aspect: "4:3"
 ---
 ```
 
-Terminal character cells are approximately 1:2 (width:height), so a 16:9 aspect target computes the correct padding accounting for this cell ratio. Aspect padding acts as a minimum — it never shrinks a layout's own padding.
+The aspect ratio drives horizontal and vertical padding for all layouts. When the terminal is wider than the target ratio, horizontal padding (pillarbox) is added. When taller, vertical padding (letterbox) is added. Terminal character cells are approximately 1:2 (width:height), so the computation accounts for this cell ratio.
+
+When no aspect ratio padding applies (e.g. the terminal already matches the ratio), a small fixed minimum of 2 characters horizontal padding is used so content doesn't touch the terminal edges.
 
 ### Custom Layouts
 
@@ -429,15 +456,12 @@ Define custom grid layouts in deck frontmatter under `layouts`. Custom layouts u
 ```yaml
 ---
 layouts:
-  sidebar:
-    columns: [30, 70]
-    gutter: 3
-  thirds:
+  hero:
+    columns: [40, 60]
+    gutter: 4
+  dashboard:
     columns: [33, 34, 33]
-  quad:
-    columns: [50, 50]
-    rows: [50, 50]
-    gutter: 1
+    rows: [60, 40]
 ---
 ```
 
@@ -445,7 +469,7 @@ Reference a custom layout per slide:
 
 ```yaml
 ---
-layout: sidebar
+layout: hero
 ---
 ```
 
@@ -460,7 +484,7 @@ These fields apply to both custom layouts and built-in overrides:
 | `columns` | `[]int` | `[100]` | Column widths as percentages |
 | `rows` | `[]int` | `[100]` | Row heights as percentages |
 | `gutter` | int | `2` | Gap between cells in characters |
-| `padX` | int | proportional (W/8) | Horizontal padding |
+| `padX` | int | aspect-based | Horizontal padding (from aspect ratio, fallback: 2) |
 | `padY` | int | `1` | Vertical padding |
 | `align` | enum | `"top"` | Content alignment within cells |
 
@@ -591,7 +615,9 @@ Override via CLI (`--theme dark`) or deck frontmatter (`theme: "dark"`).
 ```markdown
 ---
 title: "My Talk"
-theme: "default"
+footer:
+  left: "Acme Corp"
+  center: "Internal"
 ---
 
 # Hello, World!
@@ -601,15 +627,11 @@ A terminal-native presentation.
 ???
 Opening remarks go here.
 
----
-
 ## Key Features
 
 - **Fast** — renders instantly
 - **Portable** — runs in any terminal
 - **Simple** — just Markdown
-
----
 
 ---
 layout: two-col
@@ -625,10 +647,16 @@ Content for the left column.
 Content for the right column.
 
 ---
+layout: sidebar
+---
 
----
-layout: title
----
+## Navigation
+
+Sidebar links.
+
+## Main Content
+
+The main panel.
 
 # Thank You!
 ```
