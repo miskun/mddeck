@@ -71,11 +71,20 @@ func (d DeckMeta) GetSafeAnsi() bool {
 
 // SlideMeta holds per-slide frontmatter.
 type SlideMeta struct {
-	Layout Layout `yaml:"layout"`
-	Ratio  string `yaml:"ratio"`
-	Align  Align  `yaml:"align"`
-	Title  string `yaml:"title"`
-	Class  string `yaml:"class"`
+	Layout    Layout `yaml:"layout"`
+	Ratio     string `yaml:"ratio"`
+	Align     Align  `yaml:"align"`
+	Title     string `yaml:"title"`
+	Class     string `yaml:"class"`
+	AutoSplit *bool  `yaml:"autosplit"` // pointer so we can detect unset vs false
+}
+
+// GetAutoSplit returns the effective autosplit setting (default true).
+func (s SlideMeta) GetAutoSplit() bool {
+	if s.AutoSplit == nil {
+		return true
+	}
+	return *s.AutoSplit
 }
 
 // SlideMetaDefaults returns a SlideMeta with default values.

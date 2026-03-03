@@ -619,3 +619,78 @@ Centered content.
 		t.Errorf("slide 2 layout = %v, want terminal", deck.Slides[1].Meta.Layout)
 	}
 }
+
+func TestAutoSplitFalse(t *testing.T) {
+	// autosplit: false should absorb all headers until the next
+	// frontmatter block (which acts as a resume marker).
+	input := `## Intro
+
+Welcome!
+
+---
+autosplit: false
+---
+
+## Heading Examples
+
+# H1
+
+## H2
+
+### H3
+
+All headings on one slide.
+
+---
+autosplit: true
+---
+
+## Next Slide
+
+Content after the no-split zone.
+
+## Another Slide
+
+More content.
+`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Expect: Intro, Heading Examples (autosplit:false zone),
+	//         Next Slide, Another Slide
+	// The autosplit:true resume marker should be an empty slide that gets filtered.
+	if len(deck.Slides) != 4 {
+		for i, s := range deck.Slides {
+			title := ""
+			for _, b := range s.Blocks {
+				if b.Type == model.BlockHeading {
+					title = b.Raw
+					break
+				}
+			}
+			t.Logf("  slide %d: blocks=%d autosplit=%v title=%q", i+1, len(s.Blocks), s.Meta.GetAutoSplit(), title)
+		}
+		t.Fatalf("got %d slides, want 4", len(deck.Slides))
+	}
+
+	// Slide 2: autosplit=false, should contain 5 blocks (H2, H1, H2, H3, P)
+	if deck.Slides[1].Meta.GetAutoSplit() != false {
+		t.Errorf("slide 2 autosplit = %v, want false", deck.Slides[1].Meta.GetAutoSplit())
+	}
+	if len(deck.Slides[1].Blocks) != 5 {
+		t.Errorf("slide 2 blocks = %d, want 5", len(deck.Slides[1].Blocks))
+	}
+
+	// Slide 3: should be "Next Slide"
+	if deck.Slides[2].Blocks[0].Raw != "Next Slide" {
+		t.Errorf("slide 3 title = %q, want %q", deck.Slides[2].Blocks[0].Raw, "Next Slide")
+	}
+
+	// Slide 4: should be "Another Slide"
+	if deck.Slides[3].Blocks[0].Raw != "Another Slide" {
+		t.Errorf("slide 4 title = %q, want %q", deck.Slides[3].Blocks[0].Raw, "Another Slide")
+	}
+}

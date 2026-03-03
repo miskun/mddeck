@@ -8,7 +8,9 @@ wrap: true
 
 A tour of supported Markdown features, one slide at a time.
 
-No `---` slide breaks needed — slides split automatically on headers.
+---
+autosplit: false
+---
 
 ## Headings
 
@@ -19,6 +21,10 @@ No `---` slide breaks needed — slides split automatically on headers.
 ### Heading Level 3
 
 Each heading level gets distinct styling — bold weight plus accent color.
+
+---
+autosplit: true
+---
 
 ## Paragraphs & Wrapping
 

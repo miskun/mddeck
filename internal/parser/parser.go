@@ -82,7 +82,16 @@ func Parse(content string) (*model.Deck, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parsing slide %d: %w", i+1, err)
 		}
+		// Skip empty slides (e.g. resume markers like "autosplit: true")
+		if len(slide.Blocks) == 0 && slide.Notes == "" {
+			continue
+		}
 		deck.Slides = append(deck.Slides, *slide)
+	}
+
+	// Re-index slides after filtering
+	for i := range deck.Slides {
+		deck.Slides[i].Index = i
 	}
 
 	// Ensure at least one slide
@@ -264,14 +273,13 @@ func splitSlidesByHeaders(content string) []string {
 				slides = append(slides, text)
 			}
 
-			// Determine how many subsequent headers belong to this
-			// frontmatter slide (multi-section layouts like two-col
-			// and split need 2 headers; others need 1).
 			fmYAML := strings.Join(lines[i+1:endFM], "\n")
-			headersToSkip = 1
-			if strings.Contains(fmYAML, "two-col") || strings.Contains(fmYAML, "split") {
-				headersToSkip = 2
-			}
+
+			// Check if autosplit is explicitly disabled.
+			// When autosplit: false, consume all lines until the
+			// next frontmatter block — no header splitting within.
+			noSplit := strings.Contains(fmYAML, "autosplit: false") ||
+				strings.Contains(fmYAML, "autosplit:false")
 
 			// Start new slide with the frontmatter block
 			current = nil
@@ -279,6 +287,36 @@ func splitSlidesByHeaders(content string) []string {
 				current = append(current, lines[j])
 			}
 			i = endFM + 1
+
+			if noSplit {
+				// Absorb all lines until the next frontmatter block or EOF.
+				// Headers within this zone are NOT treated as split points.
+				// To resume normal header splitting after a no-split zone,
+				// start the next slide with a frontmatter block, e.g.:
+				//   ---
+				//   autosplit: true
+				//   ---
+				for i < len(lines) {
+					if _, ok := isSlideFrontmatter(lines, i); ok {
+						break // next frontmatter starts a new slide
+					}
+					current = append(current, lines[i])
+					i++
+				}
+			} else {
+				// Default: determine how many subsequent headers belong
+				// to this frontmatter slide. Layout-specific slides need
+				// headers: two-col/split need 2, other layouts need 1.
+				// A frontmatter with no layout (e.g. just autosplit: true)
+				// is a resume marker — don't absorb any headers.
+				if strings.Contains(fmYAML, "two-col") || strings.Contains(fmYAML, "layout: split") {
+					headersToSkip = 2
+				} else if strings.Contains(fmYAML, "layout") {
+					headersToSkip = 1
+				} else {
+					headersToSkip = 0
+				}
+			}
 			continue
 		}
 
