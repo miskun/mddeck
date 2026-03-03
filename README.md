@@ -182,6 +182,7 @@ title: "My Talk"
 theme: "default"
 wrap: true
 tabSize: 2
+lineWidth: 80
 ---
 ```
 
@@ -196,6 +197,7 @@ tabSize: 2
 | `maxWidth` | int | `0` (auto) | Maximum viewport width |
 | `maxHeight` | int | `0` (auto) | Maximum viewport height |
 | `safeAnsi` | bool | `true` | Strip non-SGR ANSI sequences |
+| `lineWidth` | int | `80` | Maximum content width in characters (`0` = unlimited) |
 | `aspect` | string | `"16:9"` | Target aspect ratio (e.g. `"16:9"`, `"4:3"`) |
 | `footer` | object | `{}` | Footer bar configuration (see below) |
 | `layouts` | map | `{}` | Custom layout definitions |
@@ -315,6 +317,13 @@ Indent list items by 2 spaces per level for nesting:
 
 Unordered lists use distinct bullets per depth (•, ◦, ▪). Ordered lists maintain per-depth numbering.
 
+Trailing `\` works as a hard line break within list items — the continuation text appears on a new line, indented under the bullet:
+
+```markdown
+* **Bold heading** \
+  Continuation text on the next line.
+```
+
 ### Tables
 
 Pipe-delimited tables render with Unicode box-drawing characters:
@@ -325,7 +334,31 @@ Pipe-delimited tables render with Unicode box-drawing characters:
 | Tables  | Done   |
 ```
 
-The separator row (`|---|---|`) is required between the header and body rows. Column widths auto-size to content and shrink proportionally when the terminal is narrow.
+The separator row (`|---|---|`) is required between the header and body rows. Column widths auto-size to content and shrink proportionally when the terminal is narrow. Cells that overflow are truncated with an ellipsis (`…`).
+
+#### Mid-Table Separators
+
+Additional separator rows within the table body render as horizontal dividers:
+
+```markdown
+| Name  | Team    |
+|-------|---------|
+| Alice | Alpha   |
+|-------|---------|
+| Bob   | Beta    |
+```
+
+#### Headerless Tables
+
+To render a table without a bold header row, start with a separator line:
+
+```markdown
+|-------|---------|
+| Alice | Alpha   |
+| Bob   | Beta    |
+```
+
+All rows render as plain text with no header emphasis.
 
 ### Alerts / Callouts
 

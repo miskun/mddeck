@@ -33,7 +33,7 @@ type DeckMeta struct {
 	Aspect    string                   `yaml:"aspect"`     // target aspect ratio, e.g. "16:9" or "4:3"
 	Wrap      *bool                    `yaml:"wrap"`       // pointer so we can detect unset vs false
 	TabSize   *int                     `yaml:"tabSize"`    // pointer so we can detect unset vs 0
-	LineWidth *int                     `yaml:"lineWidth"`  // max content width in chars (default 78, 0 = unlimited)
+	LineWidth *int                     `yaml:"lineWidth"`  // max content width in chars (default 80, 0 = unlimited)
 	MaxWidth  int                      `yaml:"maxWidth"`
 	MaxHeight int                      `yaml:"maxHeight"`
 	SafeAnsi  *bool                    `yaml:"safeAnsi"`   // pointer so we can detect unset vs false
