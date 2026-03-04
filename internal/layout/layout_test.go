@@ -408,3 +408,125 @@ func TestBothExplicitIgnoresAspect(t *testing.T) {
 		t.Errorf("stageH = %d, want 30", stageH)
 	}
 }
+
+// --- Per-row grid layout tests ---
+
+func TestPerRowGridTitleCols2(t *testing.T) {
+	// title-cols-2: row 0 = fixed 1-row title, row 1 = two columns
+	def := model.CustomLayout{
+		Grid: []model.LayoutRow{
+			{Height: -1, Columns: []int{100}},
+			{Columns: []int{50, 50}},
+		},
+	}
+
+	result := computeGrid(def, "title-cols-2", Viewport{Width: 80, Height: 24}, 80, 23, 0, 0)
+
+	if len(result.Regions) != 3 {
+		t.Fatalf("got %d regions, want 3", len(result.Regions))
+	}
+
+	// Region 0: title (full width, fixed 1 row)
+	if result.Regions[0].Width != 80 {
+		t.Errorf("title region width = %d, want 80", result.Regions[0].Width)
+	}
+	if result.Regions[0].Height != 1 {
+		t.Errorf("title region height = %d, want 1", result.Regions[0].Height)
+	}
+
+	// Regions 1 and 2: columns in second row
+	if result.Regions[1].Width == result.Regions[2].Width {
+		// Good: equal columns
+	} else {
+		t.Logf("col widths: %d, %d (may differ by 1 due to rounding)", result.Regions[1].Width, result.Regions[2].Width)
+	}
+
+	// Second row Y should be below title row
+	if result.Regions[1].Y <= result.Regions[0].Y {
+		t.Errorf("cols Y (%d) should be below title Y (%d)", result.Regions[1].Y, result.Regions[0].Y)
+	}
+
+	// Both columns same Y
+	if result.Regions[1].Y != result.Regions[2].Y {
+		t.Errorf("column Y mismatch: %d vs %d", result.Regions[1].Y, result.Regions[2].Y)
+	}
+}
+
+func TestPerRowGridTitleGrid4(t *testing.T) {
+	// title-grid-4: row 0 = fixed title, row 1 = 2 cols, row 2 = 2 cols
+	def := model.CustomLayout{
+		Grid: []model.LayoutRow{
+			{Height: -1, Columns: []int{100}},
+			{Columns: []int{50, 50}},
+			{Columns: []int{50, 50}},
+		},
+	}
+
+	result := computeGrid(def, "title-grid-4", Viewport{Width: 80, Height: 24}, 80, 23, 0, 0)
+
+	if len(result.Regions) != 5 {
+		t.Fatalf("got %d regions, want 5", len(result.Regions))
+	}
+
+	// Region 0: title (full width, fixed 1 row)
+	if result.Regions[0].Width != 80 {
+		t.Errorf("title width = %d, want 80", result.Regions[0].Width)
+	}
+	if result.Regions[0].Height != 1 {
+		t.Errorf("title height = %d, want 1", result.Regions[0].Height)
+	}
+
+	// Regions 1-2: row 1 (same Y, different X)
+	if result.Regions[1].Y != result.Regions[2].Y {
+		t.Errorf("row 1 Y mismatch: %d vs %d", result.Regions[1].Y, result.Regions[2].Y)
+	}
+
+	// Regions 3-4: row 2 (same Y, different X, below row 1)
+	if result.Regions[3].Y != result.Regions[4].Y {
+		t.Errorf("row 2 Y mismatch: %d vs %d", result.Regions[3].Y, result.Regions[4].Y)
+	}
+	if result.Regions[3].Y <= result.Regions[1].Y {
+		t.Errorf("row 2 Y (%d) should be below row 1 Y (%d)", result.Regions[3].Y, result.Regions[1].Y)
+	}
+}
+
+func TestPerRowGridCustomViaYAML(t *testing.T) {
+	// Test a fully custom grid: 3 rows with different column counts
+	def := model.CustomLayout{
+		Grid: []model.LayoutRow{
+			{Height: 10, Columns: []int{100}},          // 1 region
+			{Height: 60, Columns: []int{33, 34, 33}},   // 3 regions
+			{Height: 30, Columns: []int{50, 50}},        // 2 regions
+		},
+	}
+
+	result := computeGrid(def, "custom", Viewport{Width: 100, Height: 40}, 100, 39, 0, 0)
+
+	if len(result.Regions) != 6 {
+		t.Fatalf("got %d regions, want 6 (1+3+2)", len(result.Regions))
+	}
+}
+
+func TestBuiltinTitleCols2Layout(t *testing.T) {
+	// Verify the built-in title-cols-2 works through ComputeLayout
+	slide := &model.Slide{
+		Meta: model.SlideMeta{
+			Layout: model.LayoutTitleCols2,
+			Align:  model.AlignTop,
+		},
+		Blocks: []model.Block{
+			{Type: model.BlockHeading, Level: 2, Raw: "Title"},
+			{Type: model.BlockHeading, Level: 3, Raw: "Left"},
+			{Type: model.BlockParagraph, Raw: "Left content"},
+			{Type: model.BlockHeading, Level: 3, Raw: "Right"},
+			{Type: model.BlockParagraph, Raw: "Right content"},
+		},
+	}
+
+	vp := Viewport{Width: 80, Height: 24}
+	result := ComputeLayout(slide, vp, nil)
+
+	if len(result.Regions) != 3 {
+		t.Fatalf("title-cols-2 should produce 3 regions, got %d", len(result.Regions))
+	}
+}

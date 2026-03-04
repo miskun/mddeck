@@ -403,12 +403,24 @@ func computeHeadersToSkip(fmYAML string, layouts map[string]model.CustomLayout) 
 	}
 
 	if layoutName == "" {
-		return 0 // no layout → resume marker
+		return 1 // no layout → settings-only frontmatter, absorb next header
 	}
 
 	// Check custom layouts first
 	if layouts != nil {
 		if custom, ok := layouts[layoutName]; ok {
+			// Per-row grid: sum up all columns across all rows
+			if len(custom.Grid) > 0 {
+				total := 0
+				for _, row := range custom.Grid {
+					n := len(row.Columns)
+					if n == 0 {
+						n = 1
+					}
+					total += n
+				}
+				return total
+			}
 			cols := len(custom.Columns)
 			rows := len(custom.Rows)
 			if cols == 0 {
@@ -429,6 +441,12 @@ func computeHeadersToSkip(fmYAML string, layouts map[string]model.CustomLayout) 
 		return 3
 	case "grid-4":
 		return 4
+	case "title-cols-2":
+		return 3 // 1 title + 2 columns
+	case "title-cols-3":
+		return 4 // 1 title + 3 columns
+	case "title-grid-4":
+		return 5 // 1 title + 2×2 grid
 	}
 
 	// Other built-in layouts (title, default, center, terminal)

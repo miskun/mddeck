@@ -69,6 +69,28 @@ func builtinLayouts() map[string]model.CustomLayout {
 			Rows:    []int{50, 50},
 			PadY:    intPtr(1),
 		},
+		"title-cols-2": {
+			Grid: []model.LayoutRow{
+				{Height: -1, Columns: []int{100}},
+				{Columns: []int{50, 50}},
+			},
+			PadY: intPtr(1),
+		},
+		"title-cols-3": {
+			Grid: []model.LayoutRow{
+				{Height: -1, Columns: []int{100}},
+				{Columns: []int{33, 34, 33}},
+			},
+			PadY: intPtr(1),
+		},
+		"title-grid-4": {
+			Grid: []model.LayoutRow{
+				{Height: -1, Columns: []int{100}},
+				{Columns: []int{50, 50}},
+				{Columns: []int{50, 50}},
+			},
+			PadY: intPtr(1),
+		},
 	}
 }
 
@@ -101,6 +123,9 @@ func resolveLayout(name string, deckMeta *model.DeckMeta) model.CustomLayout {
 // mergeCustomLayout overlays non-zero fields from override onto base.
 func mergeCustomLayout(base, override model.CustomLayout) model.CustomLayout {
 	result := base
+	if len(override.Grid) > 0 {
+		result.Grid = override.Grid
+	}
 	if len(override.Columns) > 0 {
 		result.Columns = override.Columns
 	}
@@ -188,6 +213,11 @@ func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW,
 		usableH = 1
 	}
 
+	// Per-row grid mode: each row defines its own columns
+	if len(def.Grid) > 0 {
+		return computePerRowGrid(def.Grid, gutter, name, usableW, usableH, padX, padY)
+	}
+
 	cols := def.Columns
 	rows := def.Rows
 
@@ -232,6 +262,100 @@ func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW,
 		}
 		curY += rh
 		if ri < len(rowHeights)-1 {
+			curY += gutter
+		}
+	}
+
+	return LayoutResult{
+		Mode:    name,
+		Regions: regions,
+	}
+}
+
+// computePerRowGrid builds regions for a per-row grid layout where each row
+// has its own column definitions.
+// Height semantics: positive = percentage, negative = fixed rows, zero = equal share.
+func computePerRowGrid(grid []model.LayoutRow, gutter int, name model.Layout, usableW, usableH, padX, padY int) LayoutResult {
+	// Compute row heights, handling fixed vs percentage rows
+	totalGutterY := gutter * (len(grid) - 1)
+	availH := usableH - totalGutterY
+	if availH < len(grid) {
+		availH = len(grid)
+	}
+
+	// First pass: subtract fixed-height rows from available space
+	fixedTotal := 0
+	pctCount := 0
+	for _, row := range grid {
+		if row.Height < 0 {
+			fixedTotal += -row.Height
+		} else {
+			pctCount++
+		}
+	}
+	remainingH := availH - fixedTotal
+	if remainingH < pctCount {
+		remainingH = pctCount
+	}
+
+	// Second pass: distribute remaining space among percentage rows
+	var pctValues []int
+	for _, row := range grid {
+		if row.Height >= 0 {
+			h := row.Height
+			if h == 0 && pctCount > 0 {
+				h = 100 / pctCount // equal share
+			}
+			pctValues = append(pctValues, h)
+		}
+	}
+	var pctHeights []int
+	if len(pctValues) > 0 {
+		pctHeights = distributeSpace(pctValues, remainingH)
+	}
+
+	// Build final rowHeights array
+	rowHeights := make([]int, len(grid))
+	pi := 0
+	for i, row := range grid {
+		if row.Height < 0 {
+			rowHeights[i] = -row.Height
+		} else {
+			rowHeights[i] = pctHeights[pi]
+			pi++
+		}
+	}
+
+	// Build regions row by row, each with its own column widths
+	var regions []Region
+	curY := padY
+	for ri, row := range grid {
+		cols := row.Columns
+		if len(cols) == 0 {
+			cols = []int{100}
+		}
+
+		totalGutterX := gutter * (len(cols) - 1)
+		availW := usableW - totalGutterX
+		if availW < len(cols) {
+			availW = len(cols)
+		}
+		colWidths := distributeSpace(cols, availW)
+
+		curX := padX
+		for ci, cw := range colWidths {
+			regions = append(regions, Region{
+				X: curX, Y: curY,
+				Width: cw, Height: rowHeights[ri],
+			})
+			curX += cw
+			if ci < len(colWidths)-1 {
+				curX += gutter
+			}
+		}
+
+		curY += rowHeights[ri]
+		if ri < len(grid)-1 {
 			curY += gutter
 		}
 	}
@@ -387,19 +511,53 @@ func distributeSpace(pcts []int, available int) []int {
 		total = 100
 	}
 
-	sizes := make([]int, len(pcts))
+	n := len(pcts)
+	sizes := make([]int, n)
+
+	// Compute base sizes using integer division and track remainders
+	type remainder struct {
+		idx  int
+		frac int // fractional part (numerator) for largest-remainder sorting
+	}
+	remainders := make([]remainder, n)
 	used := 0
 	for i, p := range pcts {
-		if i == len(pcts)-1 {
-			sizes[i] = available - used
-		} else {
-			sizes[i] = available * p / total
-			used += sizes[i]
-		}
+		// exact = available * p / total, but we need the fractional part
+		// sizes[i] = floor(available * p / total)
+		sizes[i] = available * p / total
 		if sizes[i] < 1 {
 			sizes[i] = 1
 		}
+		// fractional remainder: (available * p) mod total
+		remainders[i] = remainder{idx: i, frac: (available * p) % total}
+		used += sizes[i]
 	}
+
+	// Distribute leftover rows one at a time to entries with largest remainders
+	leftover := available - used
+	if leftover > 0 {
+		// Simple selection: give extra to entries with largest fractional remainder
+		for leftover > 0 {
+			bestIdx := 0
+			bestFrac := -1
+			for _, r := range remainders {
+				if r.frac > bestFrac {
+					bestFrac = r.frac
+					bestIdx = r.idx
+				}
+			}
+			sizes[bestIdx]++
+			// Zero out this entry's remainder so it doesn't get another extra
+			for j := range remainders {
+				if remainders[j].idx == bestIdx {
+					remainders[j].frac = -1
+					break
+				}
+			}
+			leftover--
+		}
+	}
+
 	return sizes
 }
 

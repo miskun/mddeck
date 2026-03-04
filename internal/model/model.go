@@ -5,16 +5,19 @@ package model
 type Layout string
 
 const (
-	LayoutAuto     Layout = "auto"
-	LayoutDefault  Layout = "default"
-	LayoutTitle    Layout = "title"
-	LayoutCenter   Layout = "center"
-	LayoutCols2    Layout = "cols-2"
-	LayoutRows2    Layout = "rows-2"
-	LayoutTerminal Layout = "terminal"
-	LayoutSidebar  Layout = "sidebar"
-	LayoutCols3    Layout = "cols-3"
-	LayoutGrid4    Layout = "grid-4"
+	LayoutAuto      Layout = "auto"
+	LayoutDefault   Layout = "default"
+	LayoutTitle     Layout = "title"
+	LayoutCenter    Layout = "center"
+	LayoutCols2     Layout = "cols-2"
+	LayoutRows2     Layout = "rows-2"
+	LayoutTerminal  Layout = "terminal"
+	LayoutSidebar   Layout = "sidebar"
+	LayoutCols3     Layout = "cols-3"
+	LayoutGrid4     Layout = "grid-4"
+	LayoutTitleCols2 Layout = "title-cols-2"
+	LayoutTitleCols3 Layout = "title-cols-3"
+	LayoutTitleGrid4 Layout = "title-grid-4"
 )
 
 // Align represents vertical alignment within a layout region.
@@ -55,13 +58,25 @@ type Footer struct {
 // - columns only → single-row, N columns
 // - rows only → single-column, N rows
 // - both → len(columns) × len(rows) grid (row-major order)
+// - grid → per-row column definitions (overrides columns/rows)
 type CustomLayout struct {
-	Columns []int  `yaml:"columns"` // column widths as percentages, e.g. [30, 70]
-	Rows    []int  `yaml:"rows"`    // row heights as percentages, e.g. [60, 40]
-	Gutter  *int   `yaml:"gutter"`  // gap between cells in characters (default: 2)
-	PadX    *int   `yaml:"padX"`    // horizontal padding override
-	PadY    *int   `yaml:"padY"`    // vertical padding override
-	Align   Align  `yaml:"align"`   // content alignment within cells
+	Columns []int       `yaml:"columns"` // column widths as percentages, e.g. [30, 70]
+	Rows    []int       `yaml:"rows"`    // row heights as percentages, e.g. [60, 40]
+	Grid    []LayoutRow `yaml:"grid"`    // per-row column definitions (overrides columns/rows)
+	Gutter  *int        `yaml:"gutter"`  // gap between cells in characters (default: 2)
+	PadX    *int        `yaml:"padX"`    // horizontal padding override
+	PadY    *int        `yaml:"padY"`    // vertical padding override
+	Align   Align       `yaml:"align"`   // content alignment within cells
+}
+
+// LayoutRow defines a single row in a grid layout with its own column structure.
+// Height semantics:
+//   - positive: percentage of available space (after fixed rows are subtracted)
+//   - negative: fixed height in rows (absolute value), e.g. -1 = 1 row
+//   - zero: equal share of remaining percentage space
+type LayoutRow struct {
+	Height  int   `yaml:"height"`  // row height: >0 = percentage, <0 = fixed rows, 0 = equal share
+	Columns []int `yaml:"columns"` // column widths for this row as percentages
 }
 
 // GetGutter returns the effective gutter value (default 2).
