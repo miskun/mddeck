@@ -60,6 +60,10 @@ func TestVisibleLen(t *testing.T) {
 		{"\x1b[32mhello\x1b[0m", 5},
 		{"", 0},
 		{"\x1b[1m\x1b[32mbold green\x1b[0m", 10},
+		{"✅", 2},           // emoji = 2 cells
+		{"a✅b", 4},         // 1 + 2 + 1
+		{"日本語", 6},        // CJK = 2 cells each
+		{"abc✅def", 8},     // 3 + 2 + 3
 	}
 
 	for _, tt := range tests {

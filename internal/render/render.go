@@ -627,7 +627,7 @@ func (r *Renderer) renderTable(block model.Block, width int) []string {
 		}
 		for c, cell := range e.cells {
 			visible := stripInlineMarkdown(cell)
-			cl := utf8.RuneCountInString(visible)
+			cl := a.VisibleLen(visible)
 			if cl > colWidths[c] {
 				colWidths[c] = cl
 			}

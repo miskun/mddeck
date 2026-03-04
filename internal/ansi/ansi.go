@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // SGR (Select Graphic Rendition) regex matches valid color/style sequences.
@@ -60,14 +61,59 @@ func StripAll(text string) string {
 	return allEscapeRegex.ReplaceAllString(text, "")
 }
 
-// VisibleLen returns the visible character count (excluding ANSI sequences).
+// VisibleLen returns the visible cell width (excluding ANSI sequences).
+// Double-width characters (emoji, CJK, etc.) count as 2 cells.
 func VisibleLen(text string) int {
 	clean := StripAll(text)
 	count := 0
-	for range clean {
-		count++
+	for _, r := range clean {
+		count += runeWidth(r)
 	}
 	return count
+}
+
+// runeWidth returns the terminal cell width of a rune.
+// Most characters are 1 cell; wide characters (CJK, emoji, etc.) are 2.
+func runeWidth(r rune) int {
+	if r < 0x1100 {
+		return 1
+	}
+	// CJK Unified Ideographs and extensions
+	if r >= 0x4E00 && r <= 0x9FFF ||
+		r >= 0x3400 && r <= 0x4DBF ||
+		r >= 0x20000 && r <= 0x2A6DF ||
+		r >= 0x2A700 && r <= 0x2CEAF ||
+		r >= 0x2CEB0 && r <= 0x2EBEF ||
+		r >= 0x30000 && r <= 0x3134F ||
+		r >= 0xF900 && r <= 0xFAFF ||
+		r >= 0x2F800 && r <= 0x2FA1F {
+		return 2
+	}
+	// Hangul Jamo, Hangul Syllables, Hangul Compatibility
+	if r >= 0x1100 && r <= 0x115F ||
+		r >= 0x2329 && r <= 0x232A ||
+		r >= 0x2E80 && r <= 0x303E ||
+		r >= 0x3041 && r <= 0x33BF ||
+		r >= 0xA000 && r <= 0xA4CF ||
+		r >= 0xAC00 && r <= 0xD7AF ||
+		r >= 0xFE10 && r <= 0xFE6F ||
+		r >= 0xFF01 && r <= 0xFF60 ||
+		r >= 0xFFE0 && r <= 0xFFE6 {
+		return 2
+	}
+	// Emoji: Miscellaneous Symbols and Pictographs, Emoticons,
+	// Transport & Map, Supplemental Symbols, Dingbats, enclosed alphanumerics
+	if r >= 0x1F000 && r <= 0x1FBFF ||
+		r >= 0x2600 && r <= 0x27BF ||
+		r >= 0x2B50 && r <= 0x2B55 ||
+		r >= 0xFE00 && r <= 0xFE0F {
+		return 2
+	}
+	// Additional emoji / symbol blocks
+	if unicode.Is(unicode.So, r) && r >= 0x2000 {
+		return 2
+	}
+	return 1
 }
 
 // Truncate truncates styled text to maxVis visible characters, preserving
@@ -94,11 +140,12 @@ func Truncate(s string, maxVis int) string {
 			inEsc = true
 			continue
 		}
-		if vis >= maxVis {
+		w := runeWidth(r)
+		if vis+w > maxVis {
 			break
 		}
 		buf.WriteRune(r)
-		vis++
+		vis += w
 	}
 
 	return buf.String()
