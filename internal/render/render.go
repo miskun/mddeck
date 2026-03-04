@@ -264,9 +264,14 @@ func (r *Renderer) renderBlocks(blocks []model.Block, width int) []string {
 		blockLines := r.renderBlock(block, width)
 		lines = append(lines, blockLines...)
 
-		// Add spacing between blocks
+		// Add spacing between blocks, but not between consecutive
+		// list blocks of the same type (e.g. incremental list items).
 		if i < len(blocks)-1 {
-			lines = append(lines, "")
+			next := blocks[i+1]
+			sameList := isListType(block.Type) && block.Type == next.Type
+			if !sameList {
+				lines = append(lines, "")
+			}
 		}
 	}
 
@@ -274,6 +279,11 @@ func (r *Renderer) renderBlocks(blocks []model.Block, width int) []string {
 }
 
 // renderBlock renders a single block into styled lines.
+// isListType returns true for list block types.
+func isListType(t model.BlockType) bool {
+	return t == model.BlockUnorderedList || t == model.BlockOrderedList || t == model.BlockTaskList
+}
+
 func (r *Renderer) renderBlock(block model.Block, width int) []string {
 	switch block.Type {
 	case model.BlockHeading:
@@ -396,6 +406,10 @@ func (r *Renderer) renderOrderedList(block model.Block, width int) []string {
 	var lines []string
 	// Track per-depth counters for ordering
 	counters := make(map[int]int)
+	// If this block was split from a larger list, start at the right number
+	if block.ListStart > 0 {
+		counters[0] = block.ListStart - 1
+	}
 
 	for _, item := range block.Lines {
 		depth, text := parseListItem(item)

@@ -197,8 +197,9 @@ type Block struct {
 	Language string   // fenced code block language
 	Lines    []string // individual lines (for lists, blockquotes)
 	Children []Block  // nested blocks (for blockquotes)
-	NoHeader bool     // table without header row
-	Step     int      // reveal step (0 = always visible, 1+ = revealed on click)
+	NoHeader  bool     // table without header row
+	Step      int      // reveal step (0 = always visible, 1+ = revealed on click)
+	ListStart int      // 1-based starting index for split list items (0 = default)
 }
 
 // IsArtBlock returns true if this block is an art block (ansi, ascii, braille).

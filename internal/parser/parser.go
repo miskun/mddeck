@@ -1177,10 +1177,11 @@ func expandIncrementalLists(blocks []model.Block) []model.Block {
 		// Split list into individual items
 		for j, line := range b.Lines {
 			item := model.Block{
-				Type:  b.Type,
-				Raw:   line,
-				Lines: []string{line},
-				Step:  adjustedStep + j,
+				Type:      b.Type,
+				Raw:       line,
+				Lines:     []string{line},
+				Step:      adjustedStep + j,
+				ListStart: j + 1, // 1-based index for correct numbering
 			}
 			result = append(result, item)
 		}
