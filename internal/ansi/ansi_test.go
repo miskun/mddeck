@@ -64,6 +64,9 @@ func TestVisibleLen(t *testing.T) {
 		{"a✅b", 4},         // 1 + 2 + 1
 		{"日本語", 6},        // CJK = 2 cells each
 		{"abc✅def", 8},     // 3 + 2 + 3
+		{"┌──┐", 4},         // box-drawing = 1 cell each
+		{"│text│", 6},       // box-drawing pipes = 1 cell each
+		{"█▀▄░▒▓", 6},      // block elements = 1 cell each
 	}
 
 	for _, tt := range tests {

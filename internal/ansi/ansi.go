@@ -5,7 +5,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"unicode"
 )
 
 // SGR (Select Graphic Rendition) regex matches valid color/style sequences.
@@ -107,10 +106,6 @@ func runeWidth(r rune) int {
 		r >= 0x2600 && r <= 0x27BF ||
 		r >= 0x2B50 && r <= 0x2B55 ||
 		r >= 0xFE00 && r <= 0xFE0F {
-		return 2
-	}
-	// Additional emoji / symbol blocks
-	if unicode.Is(unicode.So, r) && r >= 0x2000 {
 		return 2
 	}
 	return 1
