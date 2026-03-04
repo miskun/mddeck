@@ -779,16 +779,40 @@ var (
 // stripInlineMarkdown removes markdown syntax markers to get the visible text length.
 // Used for table column width calculation so padding is correct after styling.
 func stripInlineMarkdown(s string) string {
+	// Extract code spans first to protect their content from other transforms
+	var codeContents []string
+	s = codeRegex.ReplaceAllStringFunc(s, func(m string) string {
+		inner := codeRegex.FindStringSubmatch(m)[1]
+		idx := len(codeContents)
+		codeContents = append(codeContents, inner)
+		return fmt.Sprintf("\x00C%d\x00", idx)
+	})
+
 	s = boldRegex.ReplaceAllString(s, "$1")
 	s = italicRegex.ReplaceAllString(s, "$1")
 	s = strikethroughRegex.ReplaceAllString(s, "$1")
-	s = codeRegex.ReplaceAllString(s, "$1")
 	s = linkRegex.ReplaceAllString(s, "$1")
+
+	// Restore code contents (without backticks)
+	for i, content := range codeContents {
+		s = strings.Replace(s, fmt.Sprintf("\x00C%d\x00", i), content, 1)
+	}
 	return s
 }
 
 // applyInlineStyles applies bold, italic, code, and link styles.
+// Code spans are extracted first so their content is protected from
+// bold / italic / strikethrough transforms.
 func (r *Renderer) applyInlineStyles(text string) string {
+	// Extract code spans first to protect their content
+	var codeSpans []string
+	text = codeRegex.ReplaceAllStringFunc(text, func(m string) string {
+		inner := codeRegex.FindStringSubmatch(m)[1]
+		idx := len(codeSpans)
+		codeSpans = append(codeSpans, r.Theme.CodeFg+inner+a.Reset+r.Theme.Fg)
+		return fmt.Sprintf("\x00C%d\x00", idx)
+	})
+
 	// Bold
 	boldColor := r.Theme.BoldFg
 	if boldColor == "" {
@@ -799,10 +823,13 @@ func (r *Renderer) applyInlineStyles(text string) string {
 	text = italicRegex.ReplaceAllString(text, a.Italic+"$1"+a.Reset+r.Theme.Fg)
 	// Strikethrough
 	text = strikethroughRegex.ReplaceAllString(text, a.Strikethrough+"$1"+a.Reset+r.Theme.Fg)
-	// Inline code
-	text = codeRegex.ReplaceAllString(text, r.Theme.CodeFg+"$1"+a.Reset+r.Theme.Fg)
 	// Links (render as styled text)
 	text = linkRegex.ReplaceAllString(text, a.Underline+r.Theme.Accent+"$1"+a.Reset+r.Theme.Fg)
+
+	// Restore code spans with styling
+	for i, span := range codeSpans {
+		text = strings.Replace(text, fmt.Sprintf("\x00C%d\x00", i), span, 1)
+	}
 
 	return text
 }

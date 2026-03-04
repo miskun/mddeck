@@ -1,23 +1,64 @@
 ---
-title: "Markdown in mddeck"
+title: "mddeck Feature Tour"
 theme: "dark"
+incrementalLists: false
 footer:
   left: "mddeck"
   center: "Feature Tour"
 ---
 
-# Markdown in mddeck
+# mddeck
 
-A tour of supported Markdown features, one slide at a time.
+*Terminal-native slide decks, powered by Markdown*
+
+```ascii
+    ┌─────────────────────────────────────────┐
+    │                                         │
+    │   Write in Markdown.                    │
+    │   Present in the terminal.              │
+    │   No browser. No GUI. Just text.        │
+    │                                         │
+    └─────────────────────────────────────────┘
+```
 
 ???
-This is so cool!
+Welcome to the mddeck feature tour! This deck showcases every major feature.
+Press Space or → to advance. Press ? for help anytime.
+
+## 01 / TEXT STYLING
+
+### Inline Styles
+
+Markdown formatting renders as ANSI terminal styles:
+
+- **Bold text** for strong emphasis
+- *Italic text* for lighter emphasis
+- ***Bold and italic*** combined
+- ~~Strikethrough~~ for deleted or deprecated content
+- `inline code` for variables, functions, and commands
+- [Links](https://github.com/miskun/mddeck) render as underlined accent text
+
+### Hard Line Breaks
+
+A trailing backslash forces a\
+hard line break right here.
+
+Two trailing spaces also work  
+for hard line breaks.
+
+Without a break marker,
+these lines merge into one paragraph.
+
+## 02 / HEADINGS
 
 ---
 autosplit: false
+layout: default
 ---
 
-## Headings
+### Heading Levels
+
+Three heading levels with distinct styling:
 
 # Heading Level 1
 
@@ -25,62 +66,75 @@ autosplit: false
 
 ### Heading Level 3
 
-Each heading level gets distinct styling — bold weight plus accent color.
+Each level gets its own color and weight from the active theme.
 
 ---
 autosplit: true
 ---
 
-## Paragraphs & Wrapping
+## 03 / LISTS
 
-This is a plain paragraph. When `wrap: true` is set in frontmatter (the default), long lines are automatically wrapped to fit the terminal width. This makes it easy to write flowing prose without worrying about line length.
+---
+layout: cols-2
+ratio: "55/45"
+incrementalLists: false
+---
 
-Short paragraphs work too.
+### Unordered Lists
 
-Multiple paragraphs are separated by blank lines, just like standard Markdown.
+Nested with distinct bullets per depth:
 
-## Bold & Italic
+- Top level — `•`
+  - Second level — `◦`
+    - Third level — `▪`
+- Lists support **bold**, *italic*, `code`
+- And [links](https://example.com) too
 
-Use **bold** for strong emphasis and *italic* for lighter emphasis.
+Hard line breaks work in lists:
 
-You can combine them: ***bold and italic*** together.
+* **Feature name** \
+  Description on the next line, \
+  indented under the bullet.
 
-They work inside sentences — the **quick** brown *fox* jumps over the **lazy** dog.
+### Ordered & Task Lists
 
-## Inline Code
+Ordered with per-depth numbering:
 
-Use backticks for inline code: `fmt.Println("hello")`.
+1. First step
+   1. Sub-step A
+   2. Sub-step B
+2. Second step
+3. Third step
 
-Variable names like `ctx`, function calls like `handleRequest()`, and types like `io.Reader` are all rendered in a distinct color.
+Task lists with checkboxes:
 
-## Unordered Lists
+- [x] Parser implementation
+- [x] ANSI renderer
+- [x] Layout engine
+- [ ] Syntax highlighting
+- [ ] Ship v2.0
 
-- First item
-- Second item with **bold** text
-- Third item with `inline code`
-- Nested concepts are expressed as separate items
-- Lists use accent-colored bullet characters
+## 04 / PROGRESSIVE REVEAL
 
-## Ordered Lists
+### Click-to-Reveal
 
-1. Parse the `.mddeck` file
-2. Build the slide deck model
-3. Compute layout for each slide
-4. Render blocks to ANSI output
-5. Enter the terminal event loop
+Use `. . .` pause markers to reveal content step by step.
 
-Ordered lists get accent-colored numbers.
+. . .
 
-## Blockquotes
+**This appeared on the first click.**
 
-> "Simplicity is the ultimate sophistication."
-> — Leonardo da Vinci
+. . .
 
-Blockquotes are rendered with a muted vertical bar indicator and dimmed text.
+**This appeared on the second click.**
 
-> You can have multiple blockquotes on the same slide.
+. . .
 
-## Fenced Code Blocks
+The slide counter shows `[step/total]` during reveals. Incremental lists reveal items one at a time by default — disable per-slide with `incrementalLists: false`.
+
+## 05 / CODE BLOCKS
+
+### Syntax Examples
 
 ```go
 package main
@@ -88,46 +142,31 @@ package main
 import "fmt"
 
 func main() {
-    deck := LoadDeck("slides.md")
+    deck := Parse("slides.md")
     for _, slide := range deck.Slides {
-        fmt.Println(slide.Title)
+        fmt.Printf("Slide %d: %s\n", slide.Index+1, slide.Meta.Title)
     }
 }
 ```
 
-Fenced blocks preserve whitespace and never wrap.
-
-## Multiple Languages
-
 ```python
-def fibonacci(n):
+def fibonacci(n: int) -> list[int]:
     a, b = 0, 1
+    result = []
     for _ in range(n):
-        yield a
+        result.append(a)
         a, b = b, a + b
+    return result
 ```
 
 ```bash
 # Build and run
 go build -o mddeck ./cmd/mddeck/
-./mddeck slides.md
+./mddeck --theme dark slides.md
+./mddeck --present --watch slides.md
 ```
 
-## Horizontal Rules
-
-Content above the rule.
-***
-Content between two rules.
-___
-Content below. Use `***` or `___` for in-slide rules.
-
-## Links
-
-Links like [mddeck on GitHub](https://github.com/miskun/mddeck) render as underlined accent-colored text.
-
-You can have [multiple](https://example.com) links [in one](https://example.com) paragraph.
-
-## ANSI Art
+## 06 / ANSI ART
 
 ```ansi
 \033[38;5;201m ██\033[38;5;207m╗      \033[38;5;213m██████\033[38;5;219m╗ \033[38;5;225m███\033[38;5;189m╗  \033[38;5;153m██\033[38;5;147m╗\033[38;5;141m███████\033[38;5;135m╗\033[0m
@@ -136,10 +175,38 @@ You can have [multiple](https://example.com) links [in one](https://example.com)
 \033[38;5;201m ██\033[38;5;207m║      \033[38;5;213m██\033[38;5;219m╔══╝  \033[38;5;225m██\033[38;5;189m║╚\033[38;5;153m████\033[38;5;147m║╚═\033[38;5;141m═══██\033[38;5;135m║\033[0m
 \033[38;5;201m ███████\033[38;5;207m╗\033[38;5;213m██████\033[38;5;219m╗  \033[38;5;225m██\033[38;5;189m║ ╚\033[38;5;153m███\033[38;5;147m║\033[38;5;141m███████\033[38;5;135m║\033[0m
 \033[38;5;201m ╚══════\033[38;5;207m╝\033[38;5;213m╚═════\033[38;5;219m╝  \033[38;5;225m╚═\033[38;5;189m╝  \033[38;5;153m╚══\033[38;5;147m╝\033[38;5;141m╚══════\033[38;5;135m╝\033[0m
-\033[38;5;244m      ·  t e r m i n a l  a r t  ·\033[0m
 ```
 
-## Braille Art
+ANSI art blocks parse escape sequences (`\033[...m`, `\e[...m`, `\x1b[...m`) and render full 256-color terminal graphics.
+
+## 07 / ASCII & BRAILLE ART
+
+---
+layout: cols-2
+incrementalLists: false
+---
+
+### ASCII Art
+
+```ascii
+    ┌───────────────────┐
+    │  Terminal Input   │
+    └────────┬──────────┘
+             │
+    ┌────────▼──────────┐
+    │   Parse Blocks    │
+    └────────┬──────────┘
+             │
+    ┌────────▼──────────┐
+    │  Compute Layout   │
+    └────────┬──────────┘
+             │
+    ┌────────▼──────────┐
+    │  Render to ANSI   │
+    └───────────────────┘
+```
+
+### Braille Art
 
 ```braille
 ⠀⠀⠀⠀⠀⠀⣀⣤⣴⣶⣶⣶⣶⣤⣄⡀⠀⠀⠀⠀⠀⠀
@@ -154,207 +221,206 @@ You can have [multiple](https://example.com) links [in one](https://example.com)
 ⠀⠀⠀⠀⠀⠀⠉⠛⠿⣿⣿⡿⠿⠛⠉⠀⠀⠀⠀⠀⠀⠀
 ```
 
-## ASCII Art
+Three art block types. Use `ansi`, `ascii`, or `braille` as the fence language tag.
 
-```ascii
-    +-------------------+
-    |   Terminal Input  |
-    +--------+----------+
-             |
-    +--------v----------+
-    |    Parse Blocks   |
-    +--------+----------+
-             |
-    +--------v----------+
-    |   Render Output   |
-    +-------------------+
-```
+## 08 / TABLES
 
-## Mixed Inline Styles
+### Feature Matrix
 
-A paragraph with **bold text**, *italic text*, `code spans`, and [links](https://example.com) all mixed together.
+| Feature          | Status | Notes                           |
+|------------------|--------|---------------------------------|
+| Bold & Italic    | ✅     | Standard Markdown syntax        |
+| Strikethrough    | ✅     | `~~text~~`                      |
+| Code Blocks      | ✅     | With language tags               |
+| Tables           | ✅     | Auto-sizing, box-drawing        |
+| Art Blocks       | ✅     | ANSI, ASCII, Braille            |
+| Progressive Reveal | ✅   | `. . .` pauses + incremental lists |
+| Nested Lists     | ✅     | 3 depth levels                  |
+| Callouts         | ✅     | 5 types with icons              |
 
-- **Bold** list items with `code` and *emphasis*
-- Regular items for contrast
-- A [linked item](https://example.com) in a list
+Tables auto-size columns, render with Unicode box-drawing, and truncate overflow cells with `…` ellipsis.
 
-> A blockquote with **bold**, *italic*, and `code` inside.
+---
+incrementalLists: false
+---
 
-## Strikethrough
+### Headerless Tables & Separators
 
-Use `~~text~~` to render ~~struck-through text~~.
+Start with a separator row for headerless tables:
 
-Useful for showing ~~old~~ revised wording or ~~deprecated~~ updated features.
+|---------|---------|
+| Alice   | Alpha   |
+| Bob     | Beta    |
 
-## Task Lists
+Mid-table separators create visual groups:
 
-Track progress with checkbox lists:
+| Team    | Members |
+|---------|---------|
+| Core    | 4       |
+|---------|---------|
+| GTM     | 6       |
+|---------|---------|
+| Labs    | 3       |
 
-- [x] Implement parser
-- [x] Build renderer
-- [ ] Add syntax highlighting
-- [ ] Write documentation
-- [ ] Ship v2.0
+## 09 / BLOCKQUOTES & ALERTS
 
-## Nested Lists
+### Blockquotes
 
-Lists can be nested using indentation:
+> "Simplicity is the ultimate sophistication."
+> — Leonardo da Vinci
 
-- Top-level item
-  - Sub-item one
-  - Sub-item two
-    - Deep nested item
-- Another top-level
-  - With a child
-
-Ordered lists nest too:
-
-1. First step
-   1. Sub-step A
-   2. Sub-step B
-2. Second step
-   1. Another sub-step
-
-## Tables
-
-| Feature        | Status | Priority |
-|----------------|--------|----------|
-| Strikethrough  | Done   | High     |
-| Nested Lists   | Done   | Medium   |
-| Task Lists     | Done   | High     |
-| Tables         | Done   | High     |
-| Line Breaks    | Done   | Medium   |
-| Callouts       | Done   | Low      |
-
-Tables render with box-drawing characters for clean terminal display.
-
-## Line Breaks
-
-Markdown normally joins consecutive lines into one paragraph.
-
-A trailing backslash forces a\
-hard line break right here.
-
-Two trailing spaces also work  
-for hard line breaks.
-
-Without a break marker,
-these lines merge into one paragraph.
-
-## Alerts & Callouts
+### Alerts & Callouts
 
 > [!NOTE]
-> This is a note callout — useful for additional context.
+> Additional context the reader should know.
 
 > [!TIP]
-> Quick tips stand out with their own icon and color.
+> Helpful advice for getting the most out of a feature.
 
 > [!WARNING]
-> Warns about potential problems or pitfalls.
+> Something that could cause problems if not careful.
 
 > [!IMPORTANT]
-> Highlights critical information the reader must know.
+> Critical information the reader must not miss.
 
 > [!CAUTION]
-> Signals danger — something that could cause data loss or harm.
+> Danger zone — could cause data loss or other serious issues.
 
-## Speaker Notes
+## 10 / HORIZONTAL RULES
 
-This slide has speaker notes attached. Press `t` to toggle presenter mode and see them.
+Content above.
 
-In presenter mode you get:
+***
 
-- Current slide and next slide preview
-- Speaker notes
-- Elapsed timer
+A horizontal rule: `***`, `___`, or `---` (when not a slide break).
 
-???
-These are the speaker notes! Only visible in presenter mode.
+___
 
-Remind the audience about the `t` key.
-
-## Keyboard Shortcuts
-
-- **Space** / **Enter** / **→** — Next slide
-- **Backspace** / **←** — Previous slide
-- **Home** / **End** — First / last slide
-- **t** — Toggle presenter mode
-- **?** — Help overlay
-- **q** — Quit
-
-## Themes
-
-Three built-in themes, set via `--theme` or frontmatter:
-
-- `default` — Cyan accent on default background
-- `dark` — Magenta accent for dark terminals
-- `light` — Blue accent for light terminals
-
-Try: `mddeck --theme dark example.md`
-
-## How Slide Splitting Works
-
-Most slides in this file split on `##` headers automatically — no `---` needed.
-
-For special layouts, a frontmatter block starts a new slide:
-
-```
----
-layout: cols-2
-ratio: "50/50"
----
-```
-
-Both styles coexist in the same file.
-
-# Layouts
-
-A tour of built-in layouts, one slide at a time.
+Content below.
 
 ---
 layout: cols-2
 ---
 
-## Two-Column Layout
+## 11 / TWO-COLUMN LAYOUT
 
-This content appears in the left column. Use slide frontmatter to set `layout: cols-2`.
+Use `layout: cols-2` in slide frontmatter. Content distributes across columns by major blocks (heading + content).
 
-- Left point A
-- Left point B
-- Left point C
-
-## Right Side
-
-This content appears in the right column. Set custom ratios with `ratio: "50/50"`.
-
-- Right point 1
-- Right point 2
-- Right point 3
-
+```yaml
 ---
 layout: cols-2
-ratio: "70/30"
+ratio: "60/40"
 ---
-
-## Two-Column Layout with 70/30 Ratio
-
-The `ratio` field in frontmatter controls column widths. This slide uses `70/30`.
-
-```go
-func render(slide Slide) string {
-    buf := newScreenBuf(w, h)
-    for _, block := range slide.Blocks {
-        buf.Set(row, col, block)
-    }
-    return buf.String()
-}
 ```
 
-## Right Side
+- Default ratio: 50/50
+- Custom via `ratio: "70/30"`
+- Each column is a separate region
 
-- Uses 70/30 ratio
-- Code on the left
-- Notes on the right
+### Right Column
+
+```ascii
+  ┌──────────┬──────────┐
+  │          │          │
+  │  Left    │  Right   │
+  │  Column  │  Column  │
+  │          │          │
+  └──────────┴──────────┘
+```
+
+---
+layout: rows-2
+---
+
+## Top Region — `rows-2`
+
+Horizontal split: top region (60%) and bottom region (40%). Great for showing a concept above and details below.
+
+## Bottom Region
+
+```ascii
+  ┌──────────────────────┐
+  │     Top Region       │
+  ├──────────────────────┤
+  │   Bottom Region      │
+  └──────────────────────┘
+```
+
+---
+layout: sidebar
+---
+
+### Sidebar
+
+Quick links:
+
+- Intro
+- Styling
+- Lists
+- Code
+- Art
+- Tables
+- Layouts
+
+### Main Content Area
+
+The **sidebar** layout uses a `30/70` column split. The narrow left panel works well for navigation, table of contents, or metadata.
+
+Content in the wider right panel has room for longer text, code blocks, and diagrams.
+
+```ascii
+  ┌─────┬────────────────┐
+  │     │                │
+  │ Nav │    Content     │
+  │     │                │
+  └─────┴────────────────┘
+```
+
+---
+layout: cols-3
+---
+
+### Column A
+
+Three equal columns for comparison layouts.
+
+Each gets ~33% width.
+
+### Column B
+
+All three columns get the same treatment and styling.
+
+Use for feature comparisons or team structures.
+
+### Column C
+
+Headers distribute automatically across regions.
+
+```
+layout: cols-3
+```
+
+---
+layout: grid-4
+---
+
+### Top Left
+
+Four-quadrant grid.
+
+### Top Right
+
+50/50 columns × 50/50 rows.
+
+### Bottom Left
+
+Great for dashboards or comparison matrices.
+
+### Bottom Right
+
+```
+layout: grid-4
+```
 
 ---
 layout: terminal
@@ -362,68 +428,138 @@ layout: terminal
 
 ## Terminal Layout
 
+```ascii
+╔═════════════════════════════════════════════════════════════════════════╗
+║                                                                         ║
+║   $ mddeck --present --watch slides.md                                  ║
+║                                                                         ║
+║   ┌─────────────────────────────────────────────────────────────────┐   ║
+║   │                                                                 │   ║
+║   │   Your presentation renders here                                │   ║
+║   │   in full terminal glory.                                       │   ║
+║   │                                                                 │   ║
+║   │                                                   1 / 42        │   ║
+║   └─────────────────────────────────────────────────────────────────┘   ║
+║                                                                         ║
+╚═════════════════════════════════════════════════════════════════════════╝
 ```
-$ mddeck --present slides.md
-╭─────────────────────────────────────────╮
-│  Welcome to mddeck                      │
-│                                         │
-│  Terminal-native presentations,         │
-│  powered by Markdown.                   │
-│                                         │
-│                               1 / 7     │
-╰─────────────────────────────────────────╯
+
+Full viewport width — ideal for code demos and ASCII art.
+
+---
+layout: center
+---
+
+## Centered Layout
+
+Content is centered both vertically and horizontally.
+
+Perfect for section dividers, quotes, or dramatic reveals.
+
+## 12 / SLIDE DIMENSIONS
+
+### Controlling the Stage
+
+```yaml
+---
+slideWidth: 80        # chars wide (default)
+slideHeight: -1       # auto from aspect ratio
+aspect: "16:9"        # target aspect ratio
+---
 ```
 
-Full viewport width — ideal for code and art.
+| Value | Meaning                                      |
+|-------|----------------------------------------------|
+| `> 0` | Explicit size in characters                 |
+| `0`   | Fill the terminal — no padding              |
+| `-1`  | Auto-calculate from other dim + aspect ratio |
+
+The slide stage is always centered in the terminal. The footer sits outside at full terminal width.
+
+## 13 / SPEAKER NOTES & PRESENTER MODE
+
+### Presenter View
+
+Press `t` to toggle presenter mode:
+
+- **Top 55%** — Current slide
+- **Bottom left** — Next slide preview
+- **Bottom right** — Speaker notes
+- **Timer** — Elapsed time since start
+
+Notes are written after `???` on any slide:
+
+```markdown
+## My Slide
+
+Content here.
+
+???
+These notes are only visible in presenter mode.
+Remind audience about the demo.
+```
+
+???
+This is a speaker note! You're seeing it because you're in presenter mode.
+Toggle with `t`. The timer in the corner tracks elapsed time.
+
+## 14 / CONFIGURATION REFERENCE
+
+### Slide Frontmatter
+
+```yaml
+---
+layout: cols-2          # layout mode
+ratio: "60/40"          # column ratio (cols-2 only)
+align: middle           # vertical alignment
+autosplit: false         # disable header splitting
+incrementalLists: false  # disable per-slide
+---
+```
+
+### Themes
+
+Three built-in themes:
+
+| Theme     | Accent     | Best for               |
+|-----------|------------|------------------------|
+| `default` | Cyan       | Default terminal bg    |
+| `dark`    | Steel blue | Dark terminal bg       |
+| `light`   | Blue       | Light terminal bg      |
+
+Set via `--theme` flag or `theme:` in deck frontmatter.
 
 ---
-layout: sidebar
+layout: center
 ---
 
-## Sidebar Layout
+## Keyboard Shortcuts
 
-This is a narrow sidebar.
-
-## Main Content
-
-The **sidebar** layout uses `columns: [30, 70]` to create a narrow left panel and a wide right panel. Content blocks are distributed round-robin across the regions.
-
----
-layout: cols-3
----
-
-## Column A
-
-First third of the content.
-
-## Column B
-
-Second third with *emphasis*.
-
-## Column C
-
-Third column to the right.
+| Key | Action |
+|-----|--------|
+| `Space` `Enter` `→` `n` | Next slide / step |
+| `Backspace` `←` `p` | Previous slide / step |
+| `Home` | First slide |
+| `End` | Last slide |
+| `t` | Toggle presenter mode |
+| `?` | Help overlay |
+| `q` | Quit |
 
 ---
-layout: grid-4
+layout: center
 ---
 
-## Top Left
+## Thank You!
 
-Quarter one.
-
-## Top Right
-
-Quarter two.
-
-## Bottom Left
-
-Quarter three.
-
-## Bottom Right
-
-Quarter four.
-
-# Thank You!
+```ascii
+    ┌─────────────────────────────────────┐
+    │                                     │
+    │   github.com/miskun/mddeck          │
+    │                                     │
+    │   go install github.com/miskun/     │
+    │     mddeck/cmd/mddeck@latest        │
+    │                                     │
+    └─────────────────────────────────────┘
+```
 
 Press `q` to quit.
