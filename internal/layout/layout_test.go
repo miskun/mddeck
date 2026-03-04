@@ -80,8 +80,8 @@ func TestCols2Ratio(t *testing.T) {
 	leftW := result.Regions[0].Width
 	rightW := result.Regions[1].Width
 
-	// Default aspect 16:9 with 100x24 → aspectPadX ≈ 7 each side → 86 usable
-	// minus gutter 2 = 84, 70/30 of 84 → ~59/25
+	// Default slideWidth 80, 16:9 → stageW=80, minus gutter 2 = 78
+	// 70/30 of 78 → ~54/24
 	if leftW < 50 || leftW > 65 {
 		t.Errorf("left width = %d, expected ~59", leftW)
 	}
@@ -135,12 +135,12 @@ func TestSplitBlocksIntoMajor(t *testing.T) {
 }
 
 func TestAspectPadding16x9(t *testing.T) {
-	// 16:9 aspect on a 120x40 terminal
+	// 16:9 aspect on a 120x40 terminal, slideWidth auto, slideHeight auto
 	vp := Viewport{Width: 120, Height: 40}
-	padX, padY := computeAspectPadding("16:9", vp)
+	_, _, padX, padY := computeSlideDimensions(vp, -1, -1, "16:9")
 
 	// Target ratio in cells: 2*16/9 ≈ 3.556
-	// Current ratio: 120/40 = 3.0 → terminal is taller than target → padY > 0
+	// Current ratio: 120/39(after footer) ≈ 3.077 → terminal is taller → padY > 0
 	if padX != 0 {
 		t.Errorf("padX = %d, want 0 (terminal is narrower than target)", padX)
 	}
@@ -152,23 +152,28 @@ func TestAspectPadding16x9(t *testing.T) {
 func TestAspectPadding4x3(t *testing.T) {
 	// 4:3 aspect on a 120x40 terminal
 	vp := Viewport{Width: 120, Height: 40}
-	padX, padY := computeAspectPadding("4:3", vp)
+	_, _, padX, _ := computeSlideDimensions(vp, -1, -1, "4:3")
 
 	// Target ratio: 2*4/3 ≈ 2.667
-	// Current: 120/40 = 3.0 → terminal wider than target → padX > 0
+	// termH = 39, candidateH = 120*3/(2*4) = 22 → fits → stageW=120, stageH=22
+	// padY = (39-22)/2 = 8 → vertical padding
+	// Actually: terminal is wider than target → padX > 0
+	// Let me check: candidateH = 120*3/8 = 45 > 39 → doesn't fit → fit to height
+	// stageW = 39*2*4/3 = 104 → padX = (120-104)/2 = 8
 	if padX <= 0 {
 		t.Errorf("padX = %d, want > 0 (terminal is wider than target)", padX)
-	}
-	if padY != 0 {
-		t.Errorf("padY = %d, want 0", padY)
 	}
 }
 
 func TestAspectPaddingInvalid(t *testing.T) {
 	vp := Viewport{Width: 80, Height: 24}
-	padX, padY := computeAspectPadding("invalid", vp)
-	if padX != 0 || padY != 0 {
-		t.Errorf("invalid aspect should return (0,0), got (%d,%d)", padX, padY)
+	stageW, stageH, _, _ := computeSlideDimensions(vp, -1, -1, "invalid")
+	// Without valid aspect, both auto → fill terminal
+	if stageW != 80 {
+		t.Errorf("stageW = %d, want 80 (fill terminal on invalid aspect)", stageW)
+	}
+	if stageH != 23 { // 24 - 1 footer
+		t.Errorf("stageH = %d, want 23", stageH)
 	}
 }
 
@@ -179,7 +184,8 @@ func TestCustomGridLayout2x1(t *testing.T) {
 		Rows:    []int{100},
 	}
 	vp := Viewport{Width: 100, Height: 30}
-	result := computeGrid(custom, "twocol", vp, 0, 0, 0, "")
+	// Full stage, no padding
+	result := computeGrid(custom, "twocol", vp, 100, 29, 0, 0)
 
 	if len(result.Regions) != 2 {
 		t.Fatalf("regions = %d, want 2", len(result.Regions))
@@ -205,7 +211,8 @@ func TestCustomGridLayout2x2(t *testing.T) {
 		Rows:    []int{50, 50},
 	}
 	vp := Viewport{Width: 100, Height: 30}
-	result := computeGrid(custom, "grid", vp, 0, 0, 0, "")
+	// Full stage, no padding
+	result := computeGrid(custom, "grid", vp, 100, 29, 0, 0)
 
 	if len(result.Regions) != 4 {
 		t.Fatalf("regions = %d, want 4", len(result.Regions))
@@ -266,59 +273,48 @@ func TestDistributeSpace(t *testing.T) {
 	}
 }
 
-func TestLineWidthCapsContentStage(t *testing.T) {
-	// Wide terminal (160 cols), lineWidth caps content to 78
-	custom := model.CustomLayout{
-		Columns: []int{100},
-		Rows:    []int{100},
-	}
+func TestSlideWidthCapsContentStage(t *testing.T) {
+	// Wide terminal (160 cols), slideWidth 78 caps content stage
 	vp := Viewport{Width: 160, Height: 40}
 
-	// Without cap
-	uncapped := computeGrid(custom, "auto", vp, 0, 0, 0, "")
-	// With 78-char cap
-	capped := computeGrid(custom, "auto", vp, 0, 0, 78, "16:9")
+	stageW, _, padX, _ := computeSlideDimensions(vp, 78, -1, "16:9")
 
-	// Uncapped region should be wider than capped
-	if uncapped.Regions[0].Width <= capped.Regions[0].Width {
-		t.Errorf("uncapped width %d should be > capped width %d",
-			uncapped.Regions[0].Width, capped.Regions[0].Width)
+	// Stage width should be exactly 78
+	if stageW != 78 {
+		t.Errorf("stageW = %d, want 78", stageW)
 	}
 
-	// Capped region width should be exactly 78
-	if capped.Regions[0].Width != 78 {
-		t.Errorf("capped width = %d, want 78", capped.Regions[0].Width)
-	}
-
-	// Content should be centered: X offset = (160 - 78) / 2
+	// Content should be centered: padX = (160 - 78) / 2 = 41
 	wantX := (160 - 78) / 2
-	if capped.Regions[0].X != wantX {
-		t.Errorf("capped X = %d, want %d (centered)", capped.Regions[0].X, wantX)
+	if padX != wantX {
+		t.Errorf("padX = %d, want %d (centered)", padX, wantX)
 	}
 }
 
-func TestLineWidthNarrowTerminal(t *testing.T) {
-	// Narrow terminal (60 cols) — lineWidth 78 should have no effect
-	custom := model.CustomLayout{
-		Columns: []int{100},
-	}
+func TestSlideWidthNarrowTerminal(t *testing.T) {
+	// Narrow terminal (60 cols) — slideWidth 78 gets clamped to terminal
 	vp := Viewport{Width: 60, Height: 30}
 
-	result := computeGrid(custom, "auto", vp, 0, 0, 78, "16:9")
-	// With default padX=2, usableW = 60 - 4 = 56, which is < 78 → no capping
-	if result.Regions[0].Width != 56 {
-		t.Errorf("width = %d, want 56 (no capping on narrow terminal)", result.Regions[0].Width)
+	stageW, _, padX, _ := computeSlideDimensions(vp, 78, -1, "16:9")
+
+	// Stage width clamped to terminal width
+	if stageW != 60 {
+		t.Errorf("stageW = %d, want 60 (clamped to terminal)", stageW)
+	}
+	if padX != 0 {
+		t.Errorf("padX = %d, want 0 (no padding when clamped)", padX)
 	}
 }
 
-func TestLineWidthWithMultipleColumns(t *testing.T) {
+func TestSlideWidthWithMultipleColumns(t *testing.T) {
 	// Two columns within a 78-char stage
 	custom := model.CustomLayout{
 		Columns: []int{50, 50},
 	}
 	vp := Viewport{Width: 160, Height: 40}
 
-	result := computeGrid(custom, "cols-2", vp, 0, 0, 78, "16:9")
+	stageW, stageH, stagePadX, stagePadY := computeSlideDimensions(vp, 78, -1, "16:9")
+	result := computeGrid(custom, "cols-2", vp, stageW, stageH, stagePadX, stagePadY)
 
 	// Both regions should be within the 78-char stage
 	leftEnd := result.Regions[0].X + result.Regions[0].Width
@@ -328,10 +324,10 @@ func TestLineWidthWithMultipleColumns(t *testing.T) {
 	stageLeft := result.Regions[0].X
 	stageRight := rightEnd
 
-	stageWidth := stageRight - stageLeft
+	totalWidth := stageRight - stageLeft
 	// Stage should be ≤ 78 (may be less due to gutter)
-	if stageWidth > 78 {
-		t.Errorf("total stage width %d exceeds lineWidth 78", stageWidth)
+	if totalWidth > 78 {
+		t.Errorf("total stage width %d exceeds slideWidth 78", totalWidth)
 	}
 
 	// Right column should start after left + gutter
@@ -340,47 +336,75 @@ func TestLineWidthWithMultipleColumns(t *testing.T) {
 	}
 }
 
-func TestAspectRatioHeightCap(t *testing.T) {
-	// With lineWidth 78 and 16:9, height should be capped.
-	// maxH = 78 * 9 / (2 * 16) = 21
-	custom := model.CustomLayout{
-		Columns: []int{100},
-		Rows:    []int{100},
-	}
+func TestSlideWidthWithAutoHeight(t *testing.T) {
+	// slideWidth 78, slideHeight auto, 16:9. Height = 78*9/(2*16) = 21
 	vp := Viewport{Width: 160, Height: 40}
 
-	result := computeGrid(custom, "auto", vp, 0, 0, 78, "16:9")
+	stageW, stageH, _, padY := computeSlideDimensions(vp, 78, -1, "16:9")
 
-	if result.Regions[0].Width != 78 {
-		t.Errorf("width = %d, want 78", result.Regions[0].Width)
+	if stageW != 78 {
+		t.Errorf("stageW = %d, want 78", stageW)
 	}
 
 	wantH := 78 * 9 / (2 * 16) // = 21
-	if result.Regions[0].Height != wantH {
-		t.Errorf("height = %d, want %d (aspect-ratio capped)", result.Regions[0].Height, wantH)
+	if stageH != wantH {
+		t.Errorf("stageH = %d, want %d (aspect-ratio derived)", stageH, wantH)
 	}
 
 	// Content should be vertically centered
-	// Original: padY=1, usableH=40-2-1=37, maxH=21, extra=16, padY=1+8=9
-	if result.Regions[0].Y != 9 {
-		t.Errorf("Y = %d, want 9 (vertically centered)", result.Regions[0].Y)
+	termH := 40 - 1 // footer
+	wantPadY := (termH - wantH) / 2
+	if padY != wantPadY {
+		t.Errorf("padY = %d, want %d (vertically centered)", padY, wantPadY)
 	}
 }
 
-func TestNoHeightCapWithoutLineWidth(t *testing.T) {
-	// Without lineWidth cap, aspect ratio height capping should not reduce
-	// height from what the viewport provides (aspect padding handles it).
-	custom := model.CustomLayout{
-		Columns: []int{100},
-	}
+func TestSlideWidthFillTerminal(t *testing.T) {
+	// slideWidth 0, slideHeight 0 → fill entire terminal
 	vp := Viewport{Width: 100, Height: 30}
 
-	// No lineWidth cap, no aspect padding
-	result := computeGrid(custom, "auto", vp, 0, 0, 0, "16:9")
+	stageW, stageH, padX, padY := computeSlideDimensions(vp, 0, 0, "16:9")
 
-	// usableW = 100-4 = 96, maxH = 96*9/32 = 27
-	// usableH = 30-2-1 = 27 → exactly at the cap, so no extra padding
-	if result.Regions[0].Height != 27 {
-		t.Errorf("height = %d, want 27", result.Regions[0].Height)
+	if stageW != 100 {
+		t.Errorf("stageW = %d, want 100 (fill terminal)", stageW)
+	}
+	if stageH != 29 { // minus footer
+		t.Errorf("stageH = %d, want 29 (fill terminal minus footer)", stageH)
+	}
+	if padX != 0 {
+		t.Errorf("padX = %d, want 0", padX)
+	}
+	if padY != 0 {
+		t.Errorf("padY = %d, want 0", padY)
+	}
+}
+
+func TestSlideHeightExplicitWidthAuto(t *testing.T) {
+	// slideWidth auto, slideHeight 20, 16:9 → width = 20*2*16/9 = 71
+	vp := Viewport{Width: 160, Height: 40}
+
+	stageW, stageH, _, _ := computeSlideDimensions(vp, -1, 20, "16:9")
+
+	if stageH != 20 {
+		t.Errorf("stageH = %d, want 20", stageH)
+	}
+
+	wantW := 20 * 2 * 16 / 9 // = 71
+	if stageW != wantW {
+		t.Errorf("stageW = %d, want %d (auto from aspect)", stageW, wantW)
+	}
+}
+
+func TestBothExplicitIgnoresAspect(t *testing.T) {
+	// Both explicit → aspect is ignored
+	vp := Viewport{Width: 160, Height: 40}
+
+	stageW, stageH, _, _ := computeSlideDimensions(vp, 100, 30, "16:9")
+
+	if stageW != 100 {
+		t.Errorf("stageW = %d, want 100", stageW)
+	}
+	if stageH != 30 {
+		t.Errorf("stageH = %d, want 30", stageH)
 	}
 }

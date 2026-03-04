@@ -363,14 +363,6 @@ func (rt *Runtime) getViewport() layout.Viewport {
 		w, h = 80, 24
 	}
 
-	// Apply maxWidth/maxHeight overrides
-	if rt.Deck.Meta.MaxWidth > 0 && w > rt.Deck.Meta.MaxWidth {
-		w = rt.Deck.Meta.MaxWidth
-	}
-	if rt.Deck.Meta.MaxHeight > 0 && h > rt.Deck.Meta.MaxHeight {
-		h = rt.Deck.Meta.MaxHeight
-	}
-
 	return layout.Viewport{Width: w, Height: h}
 }
 

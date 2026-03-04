@@ -130,12 +130,20 @@ func ComputeLayout(slide *model.Slide, vp Viewport, deckMeta *model.DeckMeta) La
 		layout = autoDetect(slide)
 	}
 
-	// Compute aspect-ratio-based padding (default: 16:9)
+	// Read slide dimension parameters
+	slideWidth := 80
+	slideHeight := -1
 	aspect := "16:9"
-	if deckMeta != nil && deckMeta.Aspect != "" {
-		aspect = deckMeta.Aspect
+	if deckMeta != nil {
+		slideWidth = deckMeta.GetSlideWidth()
+		slideHeight = deckMeta.GetSlideHeight()
+		if deckMeta.Aspect != "" {
+			aspect = deckMeta.Aspect
+		}
 	}
-	aspectPadX, aspectPadY := computeAspectPadding(aspect, vp)
+
+	// Compute slide stage dimensions and centering padding
+	stageW, stageH, stagePadX, stagePadY := computeSlideDimensions(vp, slideWidth, slideHeight, aspect)
 
 	// Resolve layout definition (builtin, overridden, or custom)
 	def := resolveLayout(string(layout), deckMeta)
@@ -147,48 +155,30 @@ func ComputeLayout(slide *model.Slide, vp Viewport, deckMeta *model.DeckMeta) La
 		}
 	}
 
-	// Read line width cap (default 78, 0 = unlimited)
-	lineWidth := 0
-	if deckMeta != nil {
-		lineWidth = deckMeta.GetLineWidth()
-	}
-
-	return computeGrid(def, layout, vp, aspectPadX, aspectPadY, lineWidth, aspect)
+	return computeGrid(def, layout, vp, stageW, stageH, stagePadX, stagePadY)
 }
 
 // computeGrid creates a grid layout from a CustomLayout definition.
 // This is the single layout engine used by all layouts — built-in and custom.
-// lineWidth caps the total content stage width (0 = unlimited).
-// aspect is used to derive the maximum content height when lineWidth caps the width.
-func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, aspectPadX, aspectPadY, lineWidth int, aspect string) LayoutResult {
+// stageW and stageH are the pre-computed content stage dimensions.
+// stagePadX and stagePadY position the stage within the viewport.
+func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW, stageH, stagePadX, stagePadY int) LayoutResult {
 	gutter := def.GetGutter()
 
-	// Determine padding.
-	// If padX is explicitly set, use it (aspect padding as minimum).
-	// If unset, use aspect padding or small fixed minimum (2).
-	padX := resolvePadX(def, vp, aspectPadX)
-	padY := resolvePadY(def, aspectPadY)
+	// Layout-level padding overrides (additive on top of stage padding)
+	padX := stagePadX
+	padY := stagePadY
+	usableW := stageW
+	usableH := stageH
 
-	usableW := vp.Width - 2*padX
-	usableH := vp.Height - 2*padY - 1 // reserve status bar row
-
-	// Cap content width to lineWidth and center the content stage
-	if lineWidth > 0 && usableW > lineWidth {
-		extra := usableW - lineWidth
-		padX += extra / 2
-		usableW = lineWidth
+	// If layout defines explicit padX/padY, they add inner padding to the stage
+	if px := def.GetPadX(); px >= 0 {
+		padX += px
+		usableW -= 2 * px
 	}
-
-	// Cap content height to maintain aspect ratio with the (possibly capped) width.
-	// targetRatio = 2*W/H (accounting for ~1:2 character cell aspect).
-	// maxH = usableW / targetRatio = usableW * den / (2 * num)
-	if num, den, ok := parseAspect(aspect); ok {
-		maxH := usableW * den / (2 * num)
-		if maxH > 0 && usableH > maxH {
-			extra := usableH - maxH
-			padY += extra / 2
-			usableH = maxH
-		}
+	if py := def.GetPadY(); py >= 0 {
+		padY += py
+		usableH -= 2 * py
 	}
 
 	if usableW < 1 {
@@ -252,69 +242,125 @@ func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, aspectP
 	}
 }
 
-// resolvePadX determines horizontal padding.
-// Explicit padX → use it (aspect as minimum).
-// Unset → aspect padding if set, otherwise small fixed minimum (2).
-func resolvePadX(def model.CustomLayout, vp Viewport, aspectPadX int) int {
-	if px := def.GetPadX(); px >= 0 {
-		if aspectPadX > px {
-			return aspectPadX
+// computeSlideDimensions calculates stage width, height, and centering padding.
+//
+// slideWidth/slideHeight semantics:
+//
+//	> 0  = explicit size in characters
+//	  0  = fill terminal (no padding on that axis)
+//	 -1  = auto-calculate from the other dimension + aspect ratio
+//
+// When both are auto (-1), the slide fills the terminal constrained by aspect.
+// When both are explicit (> 0), aspect is ignored.
+// The footer row is always reserved (1 row subtracted from available height).
+func computeSlideDimensions(vp Viewport, slideWidth, slideHeight int, aspect string) (stageW, stageH, padX, padY int) {
+	termW := vp.Width
+	termH := vp.Height - 1 // reserve footer row
+
+	if termW < 1 {
+		termW = 1
+	}
+	if termH < 1 {
+		termH = 1
+	}
+
+	num, den, hasAspect := parseAspect(aspect)
+
+	switch {
+	case slideWidth > 0 && slideHeight > 0:
+		// Both explicit → use as-is, ignore aspect
+		stageW = slideWidth
+		stageH = slideHeight
+
+	case slideWidth > 0 && slideHeight == 0:
+		// Explicit width, fill height
+		stageW = slideWidth
+		stageH = termH
+
+	case slideWidth == 0 && slideHeight > 0:
+		// Fill width, explicit height
+		stageW = termW
+		stageH = slideHeight
+
+	case slideWidth == 0 && slideHeight == 0:
+		// Fill both axes — no padding
+		stageW = termW
+		stageH = termH
+
+	case slideWidth > 0 && slideHeight < 0:
+		// Explicit width, auto height from aspect
+		stageW = slideWidth
+		if hasAspect {
+			stageH = stageW * den / (2 * num)
+		} else {
+			stageH = termH
 		}
-		return px
-	}
-	// No explicit padX → use aspect padding, or minimal default
-	if aspectPadX > 2 {
-		return aspectPadX
-	}
-	return 2
-}
 
-// resolvePadY determines vertical padding.
-// Explicit padY → use it (aspect as minimum).
-// Unset → aspect padding if set, otherwise small fixed minimum (1).
-func resolvePadY(def model.CustomLayout, aspectPadY int) int {
-	if py := def.GetPadY(); py >= 0 {
-		if aspectPadY > py {
-			return aspectPadY
+	case slideWidth < 0 && slideHeight > 0:
+		// Auto width from aspect, explicit height
+		stageH = slideHeight
+		if hasAspect {
+			stageW = stageH * 2 * num / den
+		} else {
+			stageW = termW
 		}
-		return py
-	}
-	// No explicit padY → use aspect padding, or minimal default
-	if aspectPadY > 1 {
-		return aspectPadY
-	}
-	return 1
-}
 
-// computeAspectPadding calculates horizontal and vertical padding to achieve
-// the target aspect ratio. Terminal characters are roughly 1:2 (width:height),
-// so a character cell that is 1 col wide is about 2 units tall.
-func computeAspectPadding(aspect string, vp Viewport) (padX, padY int) {
-	num, den, ok := parseAspect(aspect)
-	if !ok {
-		return 0, 0
-	}
-
-	targetRatio := 2.0 * float64(num) / float64(den) // target W/H in character cells
-	currentRatio := float64(vp.Width) / float64(vp.Height)
-
-	if currentRatio > targetRatio {
-		// Terminal is wider than target → add horizontal padding
-		targetW := int(targetRatio * float64(vp.Height))
-		padX = (vp.Width - targetW) / 2
-		if padX < 0 {
-			padX = 0
+	case slideWidth == 0 && slideHeight < 0:
+		// Fill width, auto height from aspect
+		stageW = termW
+		if hasAspect {
+			stageH = stageW * den / (2 * num)
+		} else {
+			stageH = termH
 		}
-	} else if currentRatio < targetRatio {
-		// Terminal is taller than target → add vertical padding
-		targetH := int(float64(vp.Width) / targetRatio)
-		padY = (vp.Height - targetH) / 2
-		if padY < 0 {
-			padY = 0
+
+	case slideWidth < 0 && slideHeight == 0:
+		// Auto width from aspect, fill height
+		stageH = termH
+		if hasAspect {
+			stageW = stageH * 2 * num / den
+		} else {
+			stageW = termW
+		}
+
+	default:
+		// Both auto (-1, -1): maximize within terminal constrained by aspect
+		if hasAspect {
+			// Try fitting to terminal width first
+			candidateH := termW * den / (2 * num)
+			if candidateH <= termH {
+				stageW = termW
+				stageH = candidateH
+			} else {
+				// Fit to terminal height
+				stageH = termH
+				stageW = termH * 2 * num / den
+			}
+		} else {
+			stageW = termW
+			stageH = termH
 		}
 	}
 
-	return padX, padY
+	// Clamp to terminal bounds
+	if stageW > termW {
+		stageW = termW
+	}
+	if stageH > termH {
+		stageH = termH
+	}
+	if stageW < 1 {
+		stageW = 1
+	}
+	if stageH < 1 {
+		stageH = 1
+	}
+
+	// Center the stage in the terminal
+	padX = (termW - stageW) / 2
+	padY = (termH - stageH) / 2
+
+	return stageW, stageH, padX, padY
 }
 
 // parseAspect parses an aspect ratio string like "16:9" or "4:3".

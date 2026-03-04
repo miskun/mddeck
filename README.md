@@ -182,7 +182,7 @@ title: "My Talk"
 theme: "default"
 wrap: true
 tabSize: 2
-lineWidth: 80
+slideWidth: 80
 ---
 ```
 
@@ -194,16 +194,44 @@ lineWidth: 80
 | `theme` | string | `"default"` | Color theme |
 | `wrap` | bool | `true` | Enable paragraph wrapping |
 | `tabSize` | int | `2` | Tab expansion width |
-| `maxWidth` | int | `0` (auto) | Maximum viewport width |
-| `maxHeight` | int | `0` (auto) | Maximum viewport height |
+| `slideWidth` | int | `80` | Slide stage width in characters (see Slide Dimensions) |
+| `slideHeight` | int | `-1` (auto) | Slide stage height in characters (see Slide Dimensions) |
 | `safeAnsi` | bool | `true` | Strip non-SGR ANSI sequences |
-| `lineWidth` | int | `80` | Maximum content width in characters (`0` = unlimited) |
 | `incrementalLists` | bool | `true` | Reveal list items one at a time |
 | `aspect` | string | `"16:9"` | Target aspect ratio (e.g. `"16:9"`, `"4:3"`) |
 | `footer` | object | `{}` | Footer bar configuration (see below) |
 | `layouts` | map | `{}` | Custom layout definitions |
 
 Unknown fields are silently ignored.
+
+#### Slide Dimensions
+
+Two parameters — `slideWidth` and `slideHeight` — control the content stage size. The stage is always centered in the terminal window. The footer sits outside the stage at full terminal width.
+
+Each accepts three kinds of values:
+
+| Value | Meaning |
+|-------|---------|
+| `> 0` | Explicit size in characters |
+| `0` | Fill the terminal (no padding on that axis) |
+| `-1` | Auto-calculate from the other dimension + `aspect` ratio |
+
+Default: `slideWidth: 80`, `slideHeight: -1` (auto). This creates an 80-character-wide stage whose height is derived from the 16:9 aspect ratio.
+
+Common configurations:
+
+```yaml
+slideWidth: 80                  # 80 chars wide, height from aspect (default)
+slideWidth: 0                    # fill terminal width, height from aspect
+slideWidth: 100
+slideHeight: 30                  # explicit 100×30, aspect ignored
+slideWidth: -1
+slideHeight: 25                  # height 25, width from aspect
+slideWidth: 0
+slideHeight: 0                   # fill entire terminal, no padding
+```
+
+When both are `-1` (auto), the slide fills the terminal constrained by the aspect ratio.
 
 #### Footer
 

@@ -33,9 +33,8 @@ type DeckMeta struct {
 	Aspect           string                   `yaml:"aspect"`           // target aspect ratio, e.g. "16:9" or "4:3"
 	Wrap             *bool                    `yaml:"wrap"`             // pointer so we can detect unset vs false
 	TabSize          *int                     `yaml:"tabSize"`          // pointer so we can detect unset vs 0
-	LineWidth        *int                     `yaml:"lineWidth"`        // max content width in chars (default 80, 0 = unlimited)
-	MaxWidth         int                      `yaml:"maxWidth"`
-	MaxHeight        int                      `yaml:"maxHeight"`
+	SlideWidth       *int                     `yaml:"slideWidth"`       // slide stage width in chars (default 80, 0 = fill terminal, -1 = auto from aspect)
+	SlideHeight      *int                     `yaml:"slideHeight"`      // slide stage height in chars (default -1/auto, 0 = fill terminal)
 	SafeAnsi         *bool                    `yaml:"safeAnsi"`         // pointer so we can detect unset vs false
 	IncrementalLists *bool                    `yaml:"incrementalLists"` // auto-reveal list items one by one (default true)
 	Layouts          map[string]CustomLayout  `yaml:"layouts"`          // user-defined or overridden layouts
@@ -125,14 +124,24 @@ func (d DeckMeta) GetSafeAnsi() bool {
 	return *d.SafeAnsi
 }
 
-// GetLineWidth returns the effective line width.
+// GetSlideWidth returns the effective slide width.
 // Default is 80 (balanced for readability and multi-column layouts).
-// A value of 0 means unlimited (no content width cap).
-func (d DeckMeta) GetLineWidth() int {
-	if d.LineWidth == nil {
+// 0 = fill terminal width, -1 = auto-calculate from slide height + aspect ratio.
+func (d DeckMeta) GetSlideWidth() int {
+	if d.SlideWidth == nil {
 		return 80
 	}
-	return *d.LineWidth
+	return *d.SlideWidth
+}
+
+// GetSlideHeight returns the effective slide height.
+// Default is -1 (auto-calculate from slide width + aspect ratio).
+// 0 = fill terminal height.
+func (d DeckMeta) GetSlideHeight() int {
+	if d.SlideHeight == nil {
+		return -1
+	}
+	return *d.SlideHeight
 }
 
 // GetIncrementalLists returns the effective incrementalLists setting (default true).
