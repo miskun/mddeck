@@ -198,6 +198,7 @@ lineWidth: 80
 | `maxHeight` | int | `0` (auto) | Maximum viewport height |
 | `safeAnsi` | bool | `true` | Strip non-SGR ANSI sequences |
 | `lineWidth` | int | `80` | Maximum content width in characters (`0` = unlimited) |
+| `incrementalLists` | bool | `true` | Reveal list items one at a time |
 | `aspect` | string | `"16:9"` | Target aspect ratio (e.g. `"16:9"`, `"4:3"`) |
 | `footer` | object | `{}` | Footer bar configuration (see below) |
 | `layouts` | map | `{}` | Custom layout definitions |
@@ -245,6 +246,7 @@ align: top
 | `title` | string | `""` | Slide title |
 | `class` | string | `""` | Style class |
 | `autosplit` | bool | `true` | Enable header-based splitting within this slide |
+| `incrementalLists` | bool | inherited | Override deck-level `incrementalLists` for this slide |
 
 **Layout values:** `auto`, `default`, `title`, `center`, `cols-2`, `rows-2`, `terminal`, `sidebar`, `cols-3`, `grid-4`
 
@@ -274,6 +276,60 @@ Rules:
 - Only the first `???` per slide is recognized
 - Everything after `???` belongs to notes
 - Notes are hidden in audience mode, shown in presenter mode
+
+---
+
+## Progressive Reveal
+
+Slide content can be revealed incrementally with each keypress.
+
+### Pause Markers
+
+Insert a `. . .` line (three dots separated by spaces) to split a slide into reveal steps:
+
+```markdown
+# Architecture
+
+First point is visible immediately.
+
+. . .
+
+Second point appears on the next keypress.
+
+. . .
+
+Third point appears after another keypress.
+```
+
+Blocks before the first `. . .` are visible immediately. Each `. . .` advances the step counter so subsequent blocks require additional keypresses to appear. The slide counter shows `[step/total]` during stepped slides.
+
+### Incremental Lists
+
+By default, list items are revealed one at a time — each item requires a keypress. This applies to unordered, ordered, and task lists.
+
+```markdown
+- First item visible immediately
+- Second item on next keypress
+- Third item on another keypress
+```
+
+Disable this at the deck level:
+
+```yaml
+---
+incrementalLists: false
+---
+```
+
+Or override per slide:
+
+```yaml
+---
+incrementalLists: false
+---
+```
+
+When combined with `. . .` markers, incremental list items count as additional steps after the pause marker.
 
 ---
 

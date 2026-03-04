@@ -33,9 +33,32 @@ func NewRenderer(deck *model.Deck, th theme.Theme) *Renderer {
 	}
 }
 
+// filterBlocksByStep returns only blocks whose Step <= the given step.
+func filterBlocksByStep(blocks []model.Block, step int) []model.Block {
+	var result []model.Block
+	for _, b := range blocks {
+		if b.Step <= step {
+			result = append(result, b)
+		}
+	}
+	return result
+}
+
 // RenderSlide renders a single slide and returns composed lines for diff-based output.
-func (r *Renderer) RenderSlide(slide *model.Slide, vp layout.Viewport) []string {
-	lr := layout.ComputeLayout(slide, vp, &r.Deck.Meta)
+func (r *Renderer) RenderSlide(slide *model.Slide, vp layout.Viewport, step int) []string {
+	// Filter blocks to only those visible at the current step
+	visibleBlocks := filterBlocksByStep(slide.Blocks, step)
+
+	// Create a copy of the slide with filtered blocks for layout/rendering
+	visSlide := &model.Slide{
+		Meta:   slide.Meta,
+		Blocks: visibleBlocks,
+		Notes:  slide.Notes,
+		Index:  slide.Index,
+		Steps:  slide.Steps,
+	}
+
+	lr := layout.ComputeLayout(visSlide, vp, &r.Deck.Meta)
 	scr := newScreenBuf(vp.Width, vp.Height)
 
 	// Configure padding background with content stage bounds
@@ -63,16 +86,16 @@ func (r *Renderer) RenderSlide(slide *model.Slide, vp layout.Viewport) []string 
 
 	switch lr.Mode {
 	case model.LayoutTitle:
-		r.renderTitle(slide, lr.Regions[0], scr)
+		r.renderTitle(visSlide, lr.Regions[0], scr)
 	case model.LayoutCenter:
-		r.renderCentered(slide, lr.Regions[0], scr)
+		r.renderCentered(visSlide, lr.Regions[0], scr)
 	default:
 		// All layouts (built-in and custom) use the same grid renderer.
 		// Single region → render directly. Multiple regions → distribute blocks.
 		if len(lr.Regions) > 1 {
-			r.renderGrid(slide, lr, scr)
+			r.renderGrid(visSlide, lr, scr)
 		} else if len(lr.Regions) == 1 {
-			r.renderSingleRegion(slide.Blocks, lr.Regions[0], scr)
+			r.renderSingleRegion(visSlide.Blocks, lr.Regions[0], scr)
 		}
 	}
 
@@ -83,7 +106,11 @@ func (r *Renderer) RenderSlide(slide *model.Slide, vp layout.Viewport) []string 
 	// Right section: custom text or default slide counter
 	rightText := footer.Right
 	if rightText == "" {
-		rightText = fmt.Sprintf(" %d / %d ", slide.Index+1, total)
+		if slide.Steps > 0 {
+			rightText = fmt.Sprintf(" %d / %d [%d/%d] ", slide.Index+1, total, step+1, slide.Steps+1)
+		} else {
+			rightText = fmt.Sprintf(" %d / %d ", slide.Index+1, total)
+		}
 	}
 
 	// Left section
@@ -874,8 +901,11 @@ func (r *Renderer) expandTabs(line string) string {
 }
 
 // RenderPresenter renders the presenter view and returns composed lines.
-func (r *Renderer) RenderPresenter(slide *model.Slide, vp layout.Viewport, elapsed string) []string {
+func (r *Renderer) RenderPresenter(slide *model.Slide, vp layout.Viewport, elapsed string, step int) []string {
 	scr := newScreenBuf(vp.Width, vp.Height)
+
+	// Filter blocks by current step
+	visibleBlocks := filterBlocksByStep(slide.Blocks, step)
 
 	// Layout: top 55% = current slide, bottom = next preview + notes
 	topH := vp.Height * 55 / 100
@@ -890,7 +920,7 @@ func (r *Renderer) RenderPresenter(slide *model.Slide, vp layout.Viewport, elaps
 	// Render current slide content
 	lr := layout.ComputeLayout(slide, layout.Viewport{Width: currentRegion.Width, Height: currentRegion.Height}, &r.Deck.Meta)
 	if len(lr.Regions) > 0 {
-		renderedLines := r.renderBlocks(slide.Blocks, lr.Regions[0].Width)
+		renderedLines := r.renderBlocks(visibleBlocks, lr.Regions[0].Width)
 		for i, line := range renderedLines {
 			if i >= currentRegion.Height {
 				break
@@ -937,6 +967,9 @@ func (r *Renderer) RenderPresenter(slide *model.Slide, vp layout.Viewport, elaps
 
 	// Status bar into screen buffer
 	statusLine := fmt.Sprintf(" %s  │  %d / %d ", elapsed, slide.Index+1, total)
+	if slide.Steps > 0 {
+		statusLine = fmt.Sprintf(" %s  │  %d / %d [%d/%d] ", elapsed, slide.Index+1, total, step+1, slide.Steps+1)
+	}
 	statusCol := vp.Width - utf8.RuneCountInString(statusLine)
 	if statusCol < 0 {
 		statusCol = 0

@@ -202,7 +202,10 @@ func TestHeadings(t *testing.T) {
 }
 
 func TestUnorderedList(t *testing.T) {
-	input := `- Item one
+	input := `---
+incrementalLists: false
+---
+- Item one
 - Item two
 - Item three`
 
@@ -224,7 +227,10 @@ func TestUnorderedList(t *testing.T) {
 }
 
 func TestOrderedList(t *testing.T) {
-	input := `1. First
+	input := `---
+incrementalLists: false
+---
+1. First
 2. Second
 3. Third`
 
@@ -755,7 +761,10 @@ More content.
 }
 
 func TestNestedUnorderedList(t *testing.T) {
-	input := `- Top
+	input := `---
+incrementalLists: false
+---
+- Top
   - Middle
     - Deep
 - Another top`
@@ -785,7 +794,10 @@ func TestNestedUnorderedList(t *testing.T) {
 }
 
 func TestTaskList(t *testing.T) {
-	input := `- [x] Done item
+	input := `---
+incrementalLists: false
+---
+- [x] Done item
 - [ ] Todo item
 - [X] Also done`
 
@@ -973,5 +985,144 @@ Hello`
 	}
 	if g.GetPadX() != -1 {
 		t.Errorf("default padx = %d, want -1 (unset)", g.GetPadX())
+	}
+}
+
+func TestPauseMarker(t *testing.T) {
+	input := `---
+incrementalLists: false
+---
+# Title
+
+First paragraph
+
+. . .
+
+Second paragraph
+
+. . .
+
+Third paragraph`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	slide := deck.Slides[0]
+	if slide.Steps != 2 {
+		t.Fatalf("steps = %d, want 2", slide.Steps)
+	}
+	// Heading + 3 paragraphs = 4 blocks
+	if len(slide.Blocks) != 4 {
+		t.Fatalf("blocks = %d, want 4", len(slide.Blocks))
+	}
+	// Heading and first paragraph are step 0
+	if slide.Blocks[0].Step != 0 {
+		t.Errorf("heading step = %d, want 0", slide.Blocks[0].Step)
+	}
+	if slide.Blocks[1].Step != 0 {
+		t.Errorf("para1 step = %d, want 0", slide.Blocks[1].Step)
+	}
+	// Second paragraph is step 1
+	if slide.Blocks[2].Step != 1 {
+		t.Errorf("para2 step = %d, want 1", slide.Blocks[2].Step)
+	}
+	// Third paragraph is step 2
+	if slide.Blocks[3].Step != 2 {
+		t.Errorf("para3 step = %d, want 2", slide.Blocks[3].Step)
+	}
+}
+
+func TestIncrementalListsSplitsItems(t *testing.T) {
+	input := `- Alpha
+- Beta
+- Gamma`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	slide := deck.Slides[0]
+	// 3 items → 3 blocks (one per item)
+	if len(slide.Blocks) != 3 {
+		t.Fatalf("blocks = %d, want 3", len(slide.Blocks))
+	}
+	// Steps 0, 1, 2
+	for i, b := range slide.Blocks {
+		if b.Step != i {
+			t.Errorf("block[%d].Step = %d, want %d", i, b.Step, i)
+		}
+		if b.Type != model.BlockUnorderedList {
+			t.Errorf("block[%d].Type = %v, want BlockUnorderedList", i, b.Type)
+		}
+	}
+	if slide.Steps != 2 {
+		t.Errorf("slide.Steps = %d, want 2", slide.Steps)
+	}
+}
+
+func TestIncrementalListsDisabled(t *testing.T) {
+	input := `---
+incrementalLists: false
+---
+- Alpha
+- Beta
+- Gamma`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	slide := deck.Slides[0]
+	// List stays as single block
+	if len(slide.Blocks) != 1 {
+		t.Fatalf("blocks = %d, want 1", len(slide.Blocks))
+	}
+	if slide.Steps != 0 {
+		t.Errorf("slide.Steps = %d, want 0", slide.Steps)
+	}
+}
+
+func TestPauseWithIncrementalLists(t *testing.T) {
+	input := `# Title
+
+. . .
+
+- First
+- Second
+
+. . .
+
+Final paragraph`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	slide := deck.Slides[0]
+	// Heading(0) + list item First(1) + list item Second(2) + paragraph(3)
+	if len(slide.Blocks) != 4 {
+		t.Fatalf("blocks = %d, want 4", len(slide.Blocks))
+	}
+	if slide.Blocks[0].Step != 0 {
+		t.Errorf("heading step = %d, want 0", slide.Blocks[0].Step)
+	}
+	// List items after first ". . ." get incremental steps
+	if slide.Blocks[1].Step != 1 {
+		t.Errorf("list item 1 step = %d, want 1", slide.Blocks[1].Step)
+	}
+	if slide.Blocks[2].Step != 2 {
+		t.Errorf("list item 2 step = %d, want 2", slide.Blocks[2].Step)
+	}
+	// Paragraph after second ". . ."
+	if slide.Blocks[3].Step != 3 {
+		t.Errorf("paragraph step = %d, want 3", slide.Blocks[3].Step)
+	}
+	if slide.Steps != 3 {
+		t.Errorf("slide.Steps = %d, want 3", slide.Steps)
 	}
 }

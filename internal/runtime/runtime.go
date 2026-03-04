@@ -30,6 +30,7 @@ type Runtime struct {
 	Theme    theme.Theme
 
 	current   int  // current slide index
+	step      int  // current reveal step within slide
 	mode      Mode
 	prevMode  Mode // mode before help overlay
 	startTime time.Time
@@ -270,26 +271,40 @@ func (rt *Runtime) handleEscapeSequence(data []byte) {
 
 // Navigation methods
 func (rt *Runtime) nextSlide() {
-	if rt.current < len(rt.Deck.Slides)-1 {
+	slide := &rt.Deck.Slides[rt.current]
+	if rt.step < slide.Steps {
+		// Advance to next reveal step within current slide
+		rt.step++
+		rt.render()
+	} else if rt.current < len(rt.Deck.Slides)-1 {
 		rt.current++
+		rt.step = 0
 		rt.render()
 	}
 }
 
 func (rt *Runtime) prevSlide() {
-	if rt.current > 0 {
+	if rt.step > 0 {
+		// Go back one reveal step within current slide
+		rt.step--
+		rt.render()
+	} else if rt.current > 0 {
 		rt.current--
+		// Jump to the last step of the previous slide
+		rt.step = rt.Deck.Slides[rt.current].Steps
 		rt.render()
 	}
 }
 
 func (rt *Runtime) firstSlide() {
 	rt.current = 0
+	rt.step = 0
 	rt.render()
 }
 
 func (rt *Runtime) lastSlide() {
 	rt.current = len(rt.Deck.Slides) - 1
+	rt.step = rt.Deck.Slides[rt.current].Steps
 	rt.render()
 }
 
@@ -314,12 +329,12 @@ func (rt *Runtime) render() {
 	switch rt.mode {
 	case ModePresenter:
 		elapsed := rt.formatElapsed()
-		lines = rt.Renderer.RenderPresenter(slide, vp, elapsed)
+		lines = rt.Renderer.RenderPresenter(slide, vp, elapsed, rt.step)
 		baseFg = rt.Renderer.Theme.Fg
 	case ModeHelp:
 		lines = rt.Renderer.RenderHelp(vp)
 	default:
-		lines = rt.Renderer.RenderSlide(slide, vp)
+		lines = rt.Renderer.RenderSlide(slide, vp, rt.step)
 		baseFg = rt.Renderer.Theme.Fg
 	}
 
@@ -378,6 +393,15 @@ func (rt *Runtime) Reload(deck *model.Deck) {
 	}
 	if rt.current < 0 {
 		rt.current = 0
+	}
+
+	// Clamp step to current slide's steps
+	if rt.current < len(deck.Slides) {
+		if rt.step > deck.Slides[rt.current].Steps {
+			rt.step = deck.Slides[rt.current].Steps
+		}
+	} else {
+		rt.step = 0
 	}
 
 	rt.render()

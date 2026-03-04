@@ -99,6 +99,11 @@ func Parse(content string) (*model.Deck, error) {
 		deck.Slides[i].Index = i
 	}
 
+	// Apply incremental lists and compute reveal steps
+	for i := range deck.Slides {
+		applyRevealSteps(&deck.Slides[i], &deck.Meta)
+	}
+
 	// Ensure at least one slide
 	if len(deck.Slides) == 0 {
 		deck.Slides = append(deck.Slides, model.Slide{
@@ -514,6 +519,7 @@ func splitNotes(lines []string, start int) (body []string, notes string) {
 func parseBlocks(lines []string) []model.Block {
 	var blocks []model.Block
 	i := 0
+	step := 0 // current reveal step
 
 	for i < len(lines) {
 		line := lines[i]
@@ -525,9 +531,17 @@ func parseBlocks(lines []string) []model.Block {
 			continue
 		}
 
+		// Pause marker: ". . ." advances the step counter
+		if trimmed == ". . ." {
+			step++
+			i++
+			continue
+		}
+
 		// Fenced code block
 		if strings.HasPrefix(trimmed, "```") {
 			block, end := parseFencedBlock(lines, i)
+			block.Step = step
 			blocks = append(blocks, block)
 			i = end
 			continue
@@ -537,6 +551,7 @@ func parseBlocks(lines []string) []model.Block {
 		if strings.HasPrefix(trimmed, "#") {
 			block, ok := parseHeading(trimmed)
 			if ok {
+				block.Step = step
 				blocks = append(blocks, block)
 				i++
 				continue
@@ -545,7 +560,7 @@ func parseBlocks(lines []string) []model.Block {
 
 		// Horizontal rule (--- that's not a slide break, already handled)
 		if trimmed == "---" || trimmed == "***" || trimmed == "___" {
-			blocks = append(blocks, model.Block{Type: model.BlockHorizontalRule})
+			blocks = append(blocks, model.Block{Type: model.BlockHorizontalRule, Step: step})
 			i++
 			continue
 		}
@@ -553,6 +568,7 @@ func parseBlocks(lines []string) []model.Block {
 		// Blockquote
 		if strings.HasPrefix(trimmed, "> ") || trimmed == ">" {
 			block, end := parseBlockquote(lines, i)
+			block.Step = step
 			blocks = append(blocks, block)
 			i = end
 			continue
@@ -561,6 +577,7 @@ func parseBlocks(lines []string) []model.Block {
 		// Task list (must be checked before unordered list)
 		if isTaskListItem(trimmed) {
 			block, end := parseTaskList(lines, i)
+			block.Step = step
 			blocks = append(blocks, block)
 			i = end
 			continue
@@ -569,6 +586,7 @@ func parseBlocks(lines []string) []model.Block {
 		// Table (pipe-delimited)
 		if isTableLine(trimmed) {
 			block, end := parseTable(lines, i)
+			block.Step = step
 			blocks = append(blocks, block)
 			i = end
 			continue
@@ -577,6 +595,7 @@ func parseBlocks(lines []string) []model.Block {
 		// Unordered list
 		if isUnorderedListItem(trimmed) {
 			block, end := parseUnorderedList(lines, i)
+			block.Step = step
 			blocks = append(blocks, block)
 			i = end
 			continue
@@ -585,6 +604,7 @@ func parseBlocks(lines []string) []model.Block {
 		// Ordered list
 		if isOrderedListItem(trimmed) {
 			block, end := parseOrderedList(lines, i)
+			block.Step = step
 			blocks = append(blocks, block)
 			i = end
 			continue
@@ -592,6 +612,7 @@ func parseBlocks(lines []string) []model.Block {
 
 		// Paragraph (default)
 		block, end := parseParagraph(lines, i)
+		block.Step = step
 		blocks = append(blocks, block)
 		i = end
 	}
@@ -1108,4 +1129,69 @@ func joinParagraphLines(lines []string) string {
 		}
 	}
 	return result.String()
+}
+
+// applyRevealSteps processes a slide's blocks for progressive reveal.
+// If incrementalLists is enabled, each list block is split into individual items,
+// each getting an incrementing step value. Then Slide.Steps is set to the max step.
+func applyRevealSteps(slide *model.Slide, deckMeta *model.DeckMeta) {
+	// Determine if incremental lists are enabled for this slide.
+	// Slide-level setting overrides deck-level.
+	incremental := deckMeta.GetIncrementalLists()
+	if slide.Meta.IncrementalLists != nil {
+		incremental = *slide.Meta.IncrementalLists
+	}
+
+	if incremental {
+		slide.Blocks = expandIncrementalLists(slide.Blocks)
+	}
+
+	// Compute total steps for this slide
+	maxStep := 0
+	for _, b := range slide.Blocks {
+		if b.Step > maxStep {
+			maxStep = b.Step
+		}
+	}
+	slide.Steps = maxStep
+}
+
+// expandIncrementalLists splits list blocks into individual single-item list
+// blocks, each with an incrementing Step value. The first item inherits the
+// block's original step; subsequent items get step+1, step+2, etc.
+// Non-list blocks are passed through unchanged. When a list expansion adds
+// extra steps, all subsequent blocks are shifted forward accordingly.
+func expandIncrementalLists(blocks []model.Block) []model.Block {
+	var result []model.Block
+	offset := 0
+
+	for _, b := range blocks {
+		adjustedStep := b.Step + offset
+
+		if !isListBlock(b) || len(b.Lines) <= 1 {
+			b.Step = adjustedStep
+			result = append(result, b)
+			continue
+		}
+
+		// Split list into individual items
+		for j, line := range b.Lines {
+			item := model.Block{
+				Type:  b.Type,
+				Raw:   line,
+				Lines: []string{line},
+				Step:  adjustedStep + j,
+			}
+			result = append(result, item)
+		}
+		// A list originally occupied 1 step slot; expansion adds len-1 extra
+		offset += len(b.Lines) - 1
+	}
+
+	return result
+}
+
+// isListBlock returns true if the block is a list type.
+func isListBlock(b model.Block) bool {
+	return b.Type == model.BlockUnorderedList || b.Type == model.BlockOrderedList || b.Type == model.BlockTaskList
 }

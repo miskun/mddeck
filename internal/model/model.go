@@ -28,17 +28,18 @@ const (
 
 // DeckMeta holds deck-level frontmatter.
 type DeckMeta struct {
-	Title     string                   `yaml:"title"`
-	Theme     string                   `yaml:"theme"`
-	Aspect    string                   `yaml:"aspect"`     // target aspect ratio, e.g. "16:9" or "4:3"
-	Wrap      *bool                    `yaml:"wrap"`       // pointer so we can detect unset vs false
-	TabSize   *int                     `yaml:"tabSize"`    // pointer so we can detect unset vs 0
-	LineWidth *int                     `yaml:"lineWidth"`  // max content width in chars (default 80, 0 = unlimited)
-	MaxWidth  int                      `yaml:"maxWidth"`
-	MaxHeight int                      `yaml:"maxHeight"`
-	SafeAnsi  *bool                    `yaml:"safeAnsi"`   // pointer so we can detect unset vs false
-	Layouts   map[string]CustomLayout  `yaml:"layouts"`    // user-defined or overridden layouts
-	Footer    Footer                   `yaml:"footer"`     // configurable footer sections
+	Title            string                   `yaml:"title"`
+	Theme            string                   `yaml:"theme"`
+	Aspect           string                   `yaml:"aspect"`           // target aspect ratio, e.g. "16:9" or "4:3"
+	Wrap             *bool                    `yaml:"wrap"`             // pointer so we can detect unset vs false
+	TabSize          *int                     `yaml:"tabSize"`          // pointer so we can detect unset vs 0
+	LineWidth        *int                     `yaml:"lineWidth"`        // max content width in chars (default 80, 0 = unlimited)
+	MaxWidth         int                      `yaml:"maxWidth"`
+	MaxHeight        int                      `yaml:"maxHeight"`
+	SafeAnsi         *bool                    `yaml:"safeAnsi"`         // pointer so we can detect unset vs false
+	IncrementalLists *bool                    `yaml:"incrementalLists"` // auto-reveal list items one by one (default true)
+	Layouts          map[string]CustomLayout  `yaml:"layouts"`          // user-defined or overridden layouts
+	Footer           Footer                   `yaml:"footer"`           // configurable footer sections
 }
 
 // Footer defines the three sections of the slide footer bar.
@@ -125,7 +126,7 @@ func (d DeckMeta) GetSafeAnsi() bool {
 }
 
 // GetLineWidth returns the effective line width.
-// Default is 100 (balanced for readability and multi-column layouts).
+// Default is 80 (balanced for readability and multi-column layouts).
 // A value of 0 means unlimited (no content width cap).
 func (d DeckMeta) GetLineWidth() int {
 	if d.LineWidth == nil {
@@ -134,14 +135,23 @@ func (d DeckMeta) GetLineWidth() int {
 	return *d.LineWidth
 }
 
+// GetIncrementalLists returns the effective incrementalLists setting (default true).
+func (d DeckMeta) GetIncrementalLists() bool {
+	if d.IncrementalLists == nil {
+		return true
+	}
+	return *d.IncrementalLists
+}
+
 // SlideMeta holds per-slide frontmatter.
 type SlideMeta struct {
-	Layout    Layout `yaml:"layout"`
-	Ratio     string `yaml:"ratio"`
-	Align     Align  `yaml:"align"`
-	Title     string `yaml:"title"`
-	Class     string `yaml:"class"`
-	AutoSplit *bool  `yaml:"autosplit"` // pointer so we can detect unset vs false
+	Layout           Layout `yaml:"layout"`
+	Ratio            string `yaml:"ratio"`
+	Align            Align  `yaml:"align"`
+	Title            string `yaml:"title"`
+	Class            string `yaml:"class"`
+	AutoSplit        *bool  `yaml:"autosplit"`        // pointer so we can detect unset vs false
+	IncrementalLists *bool  `yaml:"incrementalLists"` // per-slide override for incremental lists
 }
 
 // GetAutoSplit returns the effective autosplit setting (default true).
@@ -188,6 +198,7 @@ type Block struct {
 	Lines    []string // individual lines (for lists, blockquotes)
 	Children []Block  // nested blocks (for blockquotes)
 	NoHeader bool     // table without header row
+	Step     int      // reveal step (0 = always visible, 1+ = revealed on click)
 }
 
 // IsArtBlock returns true if this block is an art block (ansi, ascii, braille).
@@ -206,6 +217,7 @@ type Slide struct {
 	Blocks []Block
 	Notes  string // speaker notes (raw markdown)
 	Index  int    // 0-based index in deck
+	Steps  int    // total number of reveal steps (0 = no progressive reveal)
 }
 
 // Deck is the top-level container for a parsed presentation.
