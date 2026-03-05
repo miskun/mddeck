@@ -33,6 +33,23 @@ func NewRenderer(deck *model.Deck, th theme.Theme) *Renderer {
 	}
 }
 
+// headingOverrides provides style and margin overrides for heading blocks.
+// Empty style strings mean "use theme default". Margin values of -1 mean
+// "use theme default"; values >= 0 are used directly.
+type headingOverrides struct {
+	H1, H2, H3        string // style overrides
+	MarginH1           int    // margin-bottom overrides (-1 = use theme default)
+	MarginH2           int
+	MarginH3           int
+}
+
+// zeroOverrides is the default (no overrides).
+var zeroOverrides = headingOverrides{
+	MarginH1: -1,
+	MarginH2: -1,
+	MarginH3: -1,
+}
+
 // filterBlocksByStep returns only blocks whose Step <= the given step.
 func filterBlocksByStep(blocks []model.Block, step int) []model.Block {
 	var result []model.Block
@@ -147,7 +164,15 @@ func (r *Renderer) RenderSlide(slide *model.Slide, vp layout.Viewport, step int)
 
 // renderCentered renders a centered-layout slide (centered vertically and horizontally).
 func (r *Renderer) renderCentered(slide *model.Slide, region layout.Region, scr *screenBuf) {
-	lines := r.renderBlocks(slide.Blocks, region.Width)
+	overrides := headingOverrides{
+		H1:       r.Theme.GetTitleStyle(),
+		H2:       r.Theme.GetTitleStyle(),
+		H3:       r.Theme.GetTitleStyle(),
+		MarginH1: r.Theme.TitleMargin,
+		MarginH2: r.Theme.TitleMargin,
+		MarginH3: r.Theme.TitleMargin,
+	}
+	lines := r.renderBlocksStyled(slide.Blocks, region.Width, overrides)
 
 	// Center vertically
 	startY := region.Y + (region.Height-len(lines))/2
@@ -204,7 +229,18 @@ func (r *Renderer) renderGrid(slide *model.Slide, lr layout.LayoutResult, scr *s
 
 	for i, blocks := range regionBlocks {
 		if len(blocks) > 0 {
-			r.renderInRegion(blocks, lr.Regions[i], scr)
+			if lr.HasTitleRow && i == 0 {
+				r.renderInRegionStyled(blocks, lr.Regions[i], scr, headingOverrides{
+					H1:       r.Theme.GetSlideTitleStyle(),
+					H2:       r.Theme.GetSlideTitleStyle(),
+					H3:       r.Theme.GetSlideTitleStyle(),
+					MarginH1: r.Theme.SlideTitleMargin,
+					MarginH2: r.Theme.SlideTitleMargin,
+					MarginH3: r.Theme.SlideTitleMargin,
+				})
+			} else {
+				r.renderInRegion(blocks, lr.Regions[i], scr)
+			}
 		}
 	}
 }
@@ -237,12 +273,40 @@ func (r *Renderer) renderInRegion(blocks []model.Block, region layout.Region, sc
 	}
 }
 
+// renderInRegionStyled renders blocks within a region using heading overrides.
+func (r *Renderer) renderInRegionStyled(blocks []model.Block, region layout.Region, scr *screenBuf, ov headingOverrides) {
+	lines := r.renderBlocksStyled(blocks, region.Width, ov)
+	startY := region.Y
+
+	overflow := len(lines) > region.Height
+	limit := region.Height
+	if overflow {
+		limit = region.Height - 1
+	}
+	if limit > len(lines) {
+		limit = len(lines)
+	}
+
+	for i := 0; i < limit; i++ {
+		scr.Set(startY+i, region.X, r.cropLine(lines[i], region.Width))
+	}
+
+	if overflow {
+		scr.Set(startY+region.Height-1, region.X, r.Theme.Muted+"↓"+a.Reset)
+	}
+}
+
 // renderBlocks converts blocks into styled lines.
 func (r *Renderer) renderBlocks(blocks []model.Block, width int) []string {
+	return r.renderBlocksStyled(blocks, width, zeroOverrides)
+}
+
+// renderBlocksStyled converts blocks into styled lines with heading overrides.
+func (r *Renderer) renderBlocksStyled(blocks []model.Block, width int, ov headingOverrides) []string {
 	var lines []string
 
 	for i, block := range blocks {
-		blockLines := r.renderBlock(block, width)
+		blockLines := r.renderBlockStyled(block, width, ov)
 		lines = append(lines, blockLines...)
 
 		// Add spacing between blocks, but not between consecutive
@@ -251,12 +315,46 @@ func (r *Renderer) renderBlocks(blocks []model.Block, width int) []string {
 			next := blocks[i+1]
 			sameList := isListType(block.Type) && block.Type == next.Type
 			if !sameList {
-				lines = append(lines, "")
+				margin := 1
+				if block.Type == model.BlockHeading {
+					margin = r.headingMargin(block.Level, ov)
+				}
+				for j := 0; j < margin; j++ {
+					lines = append(lines, "")
+				}
 			}
 		}
 	}
 
 	return lines
+}
+
+// headingMargin returns the margin-bottom for a heading block, checking
+// overrides first, then falling back to theme defaults.
+func (r *Renderer) headingMargin(level int, ov headingOverrides) int {
+	var ovMargin int
+	switch level {
+	case 1:
+		ovMargin = ov.MarginH1
+	case 2:
+		ovMargin = ov.MarginH2
+	case 3:
+		ovMargin = ov.MarginH3
+	default:
+		ovMargin = -1
+	}
+	if ovMargin >= 0 {
+		return ovMargin
+	}
+	return r.Theme.GetHeadingMargin(level)
+}
+
+// renderBlockStyled renders a single block, using heading overrides for headings.
+func (r *Renderer) renderBlockStyled(block model.Block, width int, ov headingOverrides) []string {
+	if block.Type == model.BlockHeading {
+		return r.renderHeadingStyled(block, width, ov)
+	}
+	return r.renderBlock(block, width)
 }
 
 // renderBlock renders a single block into styled lines.
@@ -296,27 +394,42 @@ func (r *Renderer) renderBlock(block model.Block, width int) []string {
 
 // renderHeading renders a heading with appropriate styling.
 func (r *Renderer) renderHeading(block model.Block, width int) []string {
+	return r.renderHeadingStyled(block, width, zeroOverrides)
+}
+
+// renderHeadingStyled renders a heading with optional style overrides.
+func (r *Renderer) renderHeadingStyled(block model.Block, width int, ov headingOverrides) []string {
 	var style string
-	var prefix string
 
 	switch block.Level {
 	case 1:
-		style = r.Theme.H1Style
-		prefix = ""
+		style = ov.H1
+		if style == "" {
+			style = r.Theme.H1Style
+		}
 	case 2:
-		style = r.Theme.H2Style
-		prefix = ""
+		style = ov.H2
+		if style == "" {
+			style = r.Theme.H2Style
+		}
+	case 3:
+		style = ov.H3
+		if style == "" {
+			style = r.Theme.H3Style
+		}
 	default:
-		style = r.Theme.H3Style
-		prefix = ""
+		// H4-H6: body color + bold
+		style = a.Bold + r.Theme.Fg
 	}
 
-	text := style + prefix + block.Raw + a.Reset
+	text := style + block.Raw + a.Reset
 	return []string{text}
 }
 
 // renderParagraph renders a paragraph with optional wrapping.
 // Embedded newlines (from hard line breaks: trailing \ or two spaces) are preserved.
+// Each line is wrapped in the theme's Fg so that paragraph text always appears
+// in the body foreground color, even after a preceding Reset (e.g. from headings).
 func (r *Renderer) renderParagraph(block model.Block, width int) []string {
 	// Split on embedded newlines first (from hard line breaks)
 	segments := strings.Split(block.Raw, "\n")
@@ -326,10 +439,10 @@ func (r *Renderer) renderParagraph(block model.Block, width int) []string {
 		if r.Wrap && width > 0 {
 			wrapped := wrapText(seg, width)
 			for _, wl := range wrapped {
-				lines = append(lines, r.applyInlineStyles(wl))
+				lines = append(lines, r.Theme.Fg+r.applyInlineStyles(wl)+a.Reset)
 			}
 		} else {
-			lines = append(lines, r.applyInlineStyles(seg))
+			lines = append(lines, r.Theme.Fg+r.applyInlineStyles(seg)+a.Reset)
 		}
 	}
 	return lines

@@ -940,7 +940,8 @@ aspect: "16:9"
 layouts:
   sidebar:
     columns: [30, 70]
-    gutter: 3
+    gutterX: 3
+    gutterY: 2
     padX: 4
     padY: 2
   grid2x2:
@@ -971,8 +972,11 @@ Hello`
 	if len(sb.Columns) != 2 || sb.Columns[0] != 30 || sb.Columns[1] != 70 {
 		t.Errorf("sidebar columns = %v, want [30 70]", sb.Columns)
 	}
-	if sb.GetGutter() != 3 {
-		t.Errorf("sidebar gutter = %d, want 3", sb.GetGutter())
+	if sb.GetGutterX() != 3 {
+		t.Errorf("sidebar gutterX = %d, want 3", sb.GetGutterX())
+	}
+	if sb.GetGutterY() != 2 {
+		t.Errorf("sidebar gutterY = %d, want 2", sb.GetGutterY())
 	}
 	if sb.GetPadX() != 4 {
 		t.Errorf("sidebar padx = %d, want 4", sb.GetPadX())
@@ -989,8 +993,11 @@ Hello`
 		t.Errorf("grid2x2 = %v cols, %v rows", g.Columns, g.Rows)
 	}
 	// No gutter/pad specified → defaults
-	if g.GetGutter() != 2 {
-		t.Errorf("default gutter = %d, want 2", g.GetGutter())
+	if g.GetGutterX() != 2 {
+		t.Errorf("default gutterX = %d, want 2", g.GetGutterX())
+	}
+	if g.GetGutterY() != 1 {
+		t.Errorf("default gutterY = %d, want 1", g.GetGutterY())
 	}
 	if g.GetPadX() != -1 {
 		t.Errorf("default padx = %d, want -1 (unset)", g.GetPadX())

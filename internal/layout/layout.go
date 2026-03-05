@@ -112,8 +112,11 @@ func mergeCustomLayout(base, override model.CustomLayout) model.CustomLayout {
 	if len(override.Rows) > 0 {
 		result.Rows = override.Rows
 	}
-	if override.Gutter != nil {
-		result.Gutter = override.Gutter
+	if override.GutterX != nil {
+		result.GutterX = override.GutterX
+	}
+	if override.GutterY != nil {
+		result.GutterY = override.GutterY
 	}
 	if override.PadX != nil {
 		result.PadX = override.PadX
@@ -249,11 +252,12 @@ func ComputeLayout(slide *model.Slide, vp Viewport, deckMeta *model.DeckMeta) La
 // stageW and stageH are the pre-computed usable dimensions (padding already subtracted).
 // stagePadX and stagePadY are the start positions (stage centering + padding already applied).
 func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW, stageH, stagePadX, stagePadY int) LayoutResult {
-	gutter := def.GetGutter()
+	gutterX := def.GetGutterX()
+	gutterY := def.GetGutterY()
 
 	// Per-row grid mode: each row defines its own columns
 	if len(def.Grid) > 0 {
-		return computePerRowGrid(def.Grid, gutter, name, stageW, stageH, stagePadX, stagePadY)
+		return computePerRowGrid(def.Grid, gutterX, gutterY, name, stageW, stageH, stagePadX, stagePadY)
 	}
 
 	cols := def.Columns
@@ -268,7 +272,7 @@ func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW,
 	}
 
 	// Compute column widths from percentages
-	totalGutterX := gutter * (len(cols) - 1)
+	totalGutterX := gutterX * (len(cols) - 1)
 	availW := stageW - totalGutterX
 	if availW < len(cols) {
 		availW = len(cols)
@@ -276,7 +280,7 @@ func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW,
 	colWidths := distributeSpace(cols, availW)
 
 	// Compute row heights from percentages
-	totalGutterY := gutter * (len(rows) - 1)
+	totalGutterY := gutterY * (len(rows) - 1)
 	availH := stageH - totalGutterY
 	if availH < len(rows) {
 		availH = len(rows)
@@ -295,12 +299,12 @@ func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW,
 			})
 			curX += cw
 			if ci < len(colWidths)-1 {
-				curX += gutter
+				curX += gutterX
 			}
 		}
 		curY += rh
 		if ri < len(rowHeights)-1 {
-			curY += gutter
+			curY += gutterY
 		}
 	}
 
@@ -313,9 +317,9 @@ func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW,
 // computePerRowGrid builds regions for a per-row grid layout where each row
 // has its own column definitions.
 // Height semantics: positive = percentage, negative = fixed rows, zero = equal share.
-func computePerRowGrid(grid []model.LayoutRow, gutter int, name model.Layout, usableW, usableH, padX, padY int) LayoutResult {
+func computePerRowGrid(grid []model.LayoutRow, gutterX, gutterY int, name model.Layout, usableW, usableH, padX, padY int) LayoutResult {
 	// Compute row heights, handling fixed vs percentage rows
-	totalGutterY := gutter * (len(grid) - 1)
+	totalGutterY := gutterY * (len(grid) - 1)
 	availH := usableH - totalGutterY
 	if availH < len(grid) {
 		availH = len(grid)
@@ -376,7 +380,7 @@ func computePerRowGrid(grid []model.LayoutRow, gutter int, name model.Layout, us
 			cols = []int{100}
 		}
 
-		totalGutterX := gutter * (len(cols) - 1)
+		totalGutterX := gutterX * (len(cols) - 1)
 		availW := usableW - totalGutterX
 		if availW < len(cols) {
 			availW = len(cols)
@@ -391,13 +395,13 @@ func computePerRowGrid(grid []model.LayoutRow, gutter int, name model.Layout, us
 			})
 			curX += cw
 			if ci < len(colWidths)-1 {
-				curX += gutter
+				curX += gutterX
 			}
 		}
 
 		curY += rowHeights[ri]
 		if ri < len(grid)-1 {
-			curY += gutter
+			curY += gutterY
 		}
 	}
 

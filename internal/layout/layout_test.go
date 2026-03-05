@@ -468,6 +468,53 @@ func TestBothExplicitIgnoresAspect(t *testing.T) {
 	}
 }
 
+func TestGutterXY(t *testing.T) {
+	// Two columns, two rows with independent gutterX=4 and gutterY=2
+	gx := 4
+	gy := 2
+	custom := model.CustomLayout{
+		Columns: []int{50, 50},
+		Rows:    []int{50, 50},
+		GutterX: &gx,
+		GutterY: &gy,
+	}
+	// 100 wide, 30 tall usable area starting at 0,0
+	result := computeGrid(custom, "grid", Viewport{Width: 100, Height: 31}, 100, 30, 0, 0)
+
+	if len(result.Regions) != 4 {
+		t.Fatalf("regions = %d, want 4", len(result.Regions))
+	}
+
+	// Horizontal gap between columns: region[1].X - (region[0].X + region[0].Width)
+	hGap := result.Regions[1].X - (result.Regions[0].X + result.Regions[0].Width)
+	if hGap != 4 {
+		t.Errorf("horizontal gap = %d, want 4 (gutterX)", hGap)
+	}
+
+	// Vertical gap between rows: region[2].Y - (region[0].Y + region[0].Height)
+	vGap := result.Regions[2].Y - (result.Regions[0].Y + result.Regions[0].Height)
+	if vGap != 2 {
+		t.Errorf("vertical gap = %d, want 2 (gutterY)", vGap)
+	}
+
+	// Verify defaults: gutterX=2, gutterY=1 when unset
+	defaultCustom := model.CustomLayout{
+		Columns: []int{50, 50},
+		Rows:    []int{50, 50},
+	}
+	result2 := computeGrid(defaultCustom, "grid", Viewport{Width: 100, Height: 31}, 100, 30, 0, 0)
+
+	hGap2 := result2.Regions[1].X - (result2.Regions[0].X + result2.Regions[0].Width)
+	if hGap2 != 2 {
+		t.Errorf("default horizontal gap = %d, want 2", hGap2)
+	}
+
+	vGap2 := result2.Regions[2].Y - (result2.Regions[0].Y + result2.Regions[0].Height)
+	if vGap2 != 1 {
+		t.Errorf("default vertical gap = %d, want 1", vGap2)
+	}
+}
+
 // --- Per-row grid layout tests ---
 
 func TestPerRowGridTitleCols2(t *testing.T) {

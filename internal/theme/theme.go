@@ -21,10 +21,24 @@ type Theme struct {
 	CodeBg    string // code background indicator
 	ErrorFg   string // error foreground
 
-	// Heading styles
+	// Heading styles (content headings — used in body regions)
 	H1Style string
 	H2Style string
 	H3Style string
+
+	// Title styles (slide titles, distinct from content headings)
+	TitleStyle      string // main title on title/section centered slides (fallback: H1Style)
+	SlideTitleStyle string // title row heading on grid layouts (fallback: H2Style)
+
+	// Heading/title margin-bottom (blank lines after element, default 1)
+	TitleMargin      int
+	SlideTitleMargin int
+	H1Margin         int
+	H2Margin         int
+	H3Margin         int
+	H4Margin         int
+	H5Margin         int
+	H6Margin         int
 
 	// Alert / callout colors
 	AlertNote      string // NOTE callout color
@@ -59,9 +73,19 @@ var Default = Theme{
 	CodeFg:         ansi.FgRGB(0, 187, 0),                  // #00bb00 green
 	CodeBg:         "",
 	ErrorFg:        ansi.FgRGB(205, 49, 49),                // #cd3131 red
-	H1Style:        ansi.Bold + ansi.FgRGB(0, 187, 187),    // cyan
-	H2Style:        ansi.Bold + ansi.FgRGB(85, 255, 255),   // #55ffff bright cyan
-	H3Style:        ansi.Bold + ansi.FgRGB(255, 255, 255),  // #ffffff white
+	H1Style:        ansi.Bold + ansi.FgRGB(0, 187, 187),    // accent (content heading)
+	H2Style:        ansi.Bold + ansi.FgRGB(0, 187, 187),    // accent (content heading)
+	H3Style:        ansi.Bold + ansi.FgRGB(0, 187, 187),    // accent (content heading)
+	TitleStyle:      ansi.Bold + ansi.FgRGB(0, 187, 187),    // cyan — main title
+	SlideTitleStyle: ansi.Bold + ansi.FgRGB(85, 255, 255),   // bright cyan — grid title row
+	TitleMargin:      1,
+	SlideTitleMargin: 1,
+	H1Margin:         1,
+	H2Margin:         1,
+	H3Margin:         1,
+	H4Margin:         1,
+	H5Margin:         1,
+	H6Margin:         1,
 	AlertNote:      ansi.FgRGB(68, 147, 248),               // #4493f8 blue
 	AlertTip:       ansi.FgRGB(63, 185, 80),                // #3fb950 green
 	AlertImportant: ansi.FgRGB(163, 113, 247),              // #a371f7 purple
@@ -89,9 +113,19 @@ var Dark = Theme{
 	CodeFg:         ansi.FgRGB(85, 255, 85),                // #55ff55 bright green
 	CodeBg:         "",
 	ErrorFg:        ansi.FgRGB(255, 85, 85),                // #ff5555 bright red
-	H1Style:        ansi.Bold + ansi.FgRGB(61, 144, 206),   // steel blue
-	H2Style:        ansi.Bold + ansi.FgRGB(61, 144, 206),   // steel blue
-	H3Style:        ansi.Bold + ansi.FgRGB(61, 144, 206),   // steel blue
+	H1Style:        ansi.Bold + ansi.FgRGB(61, 144, 206),   // accent (content heading)
+	H2Style:        ansi.Bold + ansi.FgRGB(61, 144, 206),   // accent (content heading)
+	H3Style:        ansi.Bold + ansi.FgRGB(61, 144, 206),   // accent (content heading)
+	TitleStyle:      ansi.Bold + ansi.FgRGB(61, 144, 206),   // steel blue — main title
+	SlideTitleStyle: ansi.Bold + ansi.FgRGB(120, 186, 240),  // bright steel blue — grid title row
+	TitleMargin:      1,
+	SlideTitleMargin: 1,
+	H1Margin:         1,
+	H2Margin:         1,
+	H3Margin:         1,
+	H4Margin:         1,
+	H5Margin:         1,
+	H6Margin:         1,
 	AlertNote:      ansi.FgRGB(68, 147, 248),               // #4493f8 blue
 	AlertTip:       ansi.FgRGB(63, 185, 80),                // #3fb950 green
 	AlertImportant: ansi.FgRGB(163, 113, 247),              // #a371f7 purple
@@ -118,9 +152,19 @@ var Light = Theme{
 	CodeFg:         ansi.FgRGB(163, 21, 21),                // #a31515 red
 	CodeBg:         "",
 	ErrorFg:        ansi.FgRGB(205, 49, 49),                // #cd3131 red
-	H1Style:        ansi.Bold + ansi.FgRGB(4, 81, 165),     // blue
-	H2Style:        ansi.Bold + ansi.FgRGB(0, 187, 187),    // #00bbbb cyan
-	H3Style:        ansi.Bold + ansi.FgRGB(30, 30, 30),     // near-black
+	H1Style:        ansi.Bold + ansi.FgRGB(4, 81, 165),     // accent (content heading)
+	H2Style:        ansi.Bold + ansi.FgRGB(4, 81, 165),     // accent (content heading)
+	H3Style:        ansi.Bold + ansi.FgRGB(4, 81, 165),     // accent (content heading)
+	TitleStyle:      ansi.Bold + ansi.FgRGB(4, 81, 165),     // blue — main title
+	SlideTitleStyle: ansi.Bold + ansi.FgRGB(0, 187, 187),    // cyan — grid title row
+	TitleMargin:      1,
+	SlideTitleMargin: 1,
+	H1Margin:         1,
+	H2Margin:         1,
+	H3Margin:         1,
+	H4Margin:         1,
+	H5Margin:         1,
+	H6Margin:         1,
 	AlertNote:      ansi.FgRGB(9, 105, 218),                // #0969da blue
 	AlertTip:       ansi.FgRGB(26, 127, 55),                // #1a7f37 green
 	AlertImportant: ansi.FgRGB(130, 80, 223),               // #8250df purple
@@ -133,6 +177,43 @@ var Light = Theme{
 	HRStyle:        ansi.FgRGB(102, 102, 102),              // grey
 	BlockquoteChar: "│ ",
 	BulletChar:     "• ",
+}
+
+// GetTitleStyle returns TitleStyle, falling back to H1Style.
+func (t Theme) GetTitleStyle() string {
+	if t.TitleStyle != "" {
+		return t.TitleStyle
+	}
+	return t.H1Style
+}
+
+// GetSlideTitleStyle returns SlideTitleStyle, falling back to H2Style.
+func (t Theme) GetSlideTitleStyle() string {
+	if t.SlideTitleStyle != "" {
+		return t.SlideTitleStyle
+	}
+	return t.H2Style
+}
+
+// GetHeadingMargin returns the margin-bottom (blank lines after) for a content
+// heading at the given level. Built-in themes set all margins to 1.
+func (t Theme) GetHeadingMargin(level int) int {
+	switch level {
+	case 1:
+		return t.H1Margin
+	case 2:
+		return t.H2Margin
+	case 3:
+		return t.H3Margin
+	case 4:
+		return t.H4Margin
+	case 5:
+		return t.H5Margin
+	case 6:
+		return t.H6Margin
+	default:
+		return 1
+	}
 }
 
 // themes is the registry of available themes.

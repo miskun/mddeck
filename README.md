@@ -516,7 +516,7 @@ All layouts — built-in and custom — use the same grid engine. Built-in layou
 
 ### Built-in Layouts
 
-All built-in layouts use the same defaults: padding of 1 on all sides and gutter of 2. No special-case overrides — they behave identically to custom layouts.
+All built-in layouts use the same defaults: padding of 1 on all sides, gutterX of 2 (horizontal gap between columns), and gutterY of 1 (vertical gap between rows). No special-case overrides — they behave identically to custom layouts.
 
 | Layout | Structure | Description |
 |--------|-----------|-------------|
@@ -569,14 +569,14 @@ Layout padding (configurable via the `padding` field or per-layout `padX`/`padY`
 
 ### Custom Layouts
 
-Define custom grid layouts in deck frontmatter under `layouts`. Custom layouts use the exact same parameters as built-in layouts — columns, rows, gutter, padding.
+Define custom grid layouts in deck frontmatter under `layouts`. Custom layouts use the exact same parameters as built-in layouts — columns, rows, gutterX, gutterY, padding.
 
 ```yaml
 ---
 layouts:
   hero:
     columns: [40, 60]
-    gutter: 4
+    gutterX: 4
   dashboard:
     columns: [33, 34, 33]
     rows: [60, 40]
@@ -601,7 +601,8 @@ These fields apply to both custom layouts and built-in overrides:
 |-------|------|---------|-------------|
 | `columns` | `[]int` | `[100]` | Column widths as percentages |
 | `rows` | `[]int` | `[100]` | Row heights as percentages |
-| `gutter` | int | `2` | Gap between cells in characters |
+| `gutterX` | int | `2` | Horizontal gap between columns in characters |
+| `gutterY` | int | `1` | Vertical gap between rows in lines |
 | `padX` | int | `1` | Horizontal padding (sets both left and right) |
 | `padY` | int | `1` | Vertical padding (sets both top and bottom) |
 | `padTop` | int | `1` | Top padding |
@@ -665,7 +666,7 @@ layouts:
     padX: 10
     padY: 3
   title-cols-2:
-    gutter: 4
+    gutterX: 4
 ---
 ```
 
@@ -677,7 +678,10 @@ layouts:
 
 All styling uses ANSI SGR sequences:
 
-- **Headings** — bold + accent color
+- **Title headings** (on `title`/`section` slides) — bold + title color (TitleStyle)
+- **Slide title headings** (title row on grid layouts) — bold + slide title color (SlideTitleStyle)
+- **Content headings** (H1-H3 in body regions) — bold + accent color
+- **Content headings** (H4-H6) — bold + body foreground
 - **Inline code** — colored text
 - **Blockquotes** — muted color + `│` indicator
 - **Lists** — accent-colored bullets (`•`) and numbers
@@ -742,12 +746,33 @@ Three built-in themes:
 | Theme | Description |
 |-------|-------------|
 | `default` | Cyan accent on default background |
-| `dark` | Magenta accent for dark terminals |
+| `dark` | Steel blue accent for dark terminals |
 | `light` | Blue accent for light terminals |
 
-Themes define: base foreground/background, accent color, muted color, heading styles.
+Themes define: base foreground/background, accent color, muted color, heading styles, title styles, and heading margins.
 
 Override via CLI (`--theme dark`) or deck frontmatter (`theme: "dark"`).
+
+### Title Style Tokens
+
+Slide titles use dedicated style tokens that are visually distinct from content headings:
+
+| Token | Purpose | Fallback |
+|-------|---------|----------|
+| `TitleStyle` | Main heading on `title` and `section` centered slides | `H1Style` |
+| `SlideTitleStyle` | Heading in the title row of grid layouts (`title-body`, `title-cols-2`, etc.) | `H2Style` |
+
+Content headings (H1-H3) use a uniform accent color (`H1Style`/`H2Style`/`H3Style`), while H4-H6 use bold body foreground.
+
+### Heading Margin Tokens
+
+Each heading level has a configurable margin-bottom (number of blank lines after the heading). All default to 1.
+
+| Token | Purpose |
+|-------|---------|
+| `TitleMargin` | After main title on centered slides |
+| `SlideTitleMargin` | After title-row heading on grid layouts |
+| `H1Margin` – `H6Margin` | After content headings at each level |
 
 ---
 

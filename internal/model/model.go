@@ -68,7 +68,8 @@ type CustomLayout struct {
 	Columns []int       `yaml:"columns"` // column widths as percentages, e.g. [30, 70]
 	Rows    []int       `yaml:"rows"`    // row heights as percentages, e.g. [60, 40]
 	Grid    []LayoutRow `yaml:"grid"`    // per-row column definitions (overrides columns/rows)
-	Gutter  *int        `yaml:"gutter"`  // gap between cells in characters (default: 2)
+	GutterX *int        `yaml:"gutterX"` // horizontal gap between columns (default: 2)
+	GutterY *int        `yaml:"gutterY"` // vertical gap between rows (default: 1)
 	PadX      *int        `yaml:"padX"`      // horizontal padding override (sets both left and right)
 	PadY      *int        `yaml:"padY"`      // vertical padding override (sets both top and bottom)
 	PadTop    *int        `yaml:"padTop"`    // top padding override
@@ -88,12 +89,20 @@ type LayoutRow struct {
 	Columns []int `yaml:"columns"` // column widths for this row as percentages
 }
 
-// GetGutter returns the effective gutter value (default 2).
-func (cl CustomLayout) GetGutter() int {
-	if cl.Gutter == nil {
+// GetGutterX returns the effective horizontal gutter (default 2).
+func (cl CustomLayout) GetGutterX() int {
+	if cl.GutterX == nil {
 		return 2
 	}
-	return *cl.Gutter
+	return *cl.GutterX
+}
+
+// GetGutterY returns the effective vertical gutter (default 1).
+func (cl CustomLayout) GetGutterY() int {
+	if cl.GutterY == nil {
+		return 1
+	}
+	return *cl.GutterY
 }
 
 // GetPadX returns the padX override, or -1 if unset.

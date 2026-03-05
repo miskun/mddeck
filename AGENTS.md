@@ -12,9 +12,9 @@ Terminal-native Markdown slide deck presenter, written in Go. Renders `.mddeck` 
   - `internal/model/` — Core data types (Deck, Slide, Block)
   - `internal/parser/` — `.mddeck` file parser (frontmatter, slides, notes, blocks)
   - `internal/ansi/` — ANSI escape sequence handling and safety filtering
-  - `internal/theme/` — Color theme definitions (default, dark, light)
+  - `internal/theme/` — Color theme definitions (default, dark, light); includes title style tokens (TitleStyle, SlideTitleStyle) with fallback getters, and per-level heading margin tokens
   - `internal/layout/` — Layout engine (auto, title, section, title-body, title-cols-2, title-rows-2, title-grid-4, blank)
-  - `internal/render/` — Markdown-to-ANSI renderer, presenter view, help overlay
+  - `internal/render/` — Markdown-to-ANSI renderer with heading style overrides (headingOverrides), presenter view, help overlay
   - `internal/runtime/` — Terminal raw mode, keyboard event loop, navigation
 
 ## Build & Test
