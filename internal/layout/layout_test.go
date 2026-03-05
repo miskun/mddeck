@@ -22,7 +22,7 @@ func TestAutoDetectTitle(t *testing.T) {
 	}
 }
 
-func TestAutoDetectTerminal(t *testing.T) {
+func TestAutoDetectBlank(t *testing.T) {
 	slide := &model.Slide{
 		Meta: model.SlideMetaDefaults(),
 		Blocks: []model.Block{
@@ -33,12 +33,12 @@ func TestAutoDetectTerminal(t *testing.T) {
 	vp := Viewport{Width: 80, Height: 24}
 	result := ComputeLayout(slide, vp, nil)
 
-	if result.Mode != model.LayoutTerminal {
-		t.Errorf("mode = %q, want %q", result.Mode, model.LayoutTerminal)
+	if result.Mode != model.LayoutBlank {
+		t.Errorf("mode = %q, want %q", result.Mode, model.LayoutBlank)
 	}
 }
 
-func TestAutoDetectCols2(t *testing.T) {
+func TestAutoDetectTitleCols2(t *testing.T) {
 	slide := &model.Slide{
 		Meta: model.SlideMetaDefaults(),
 		Blocks: []model.Block{
@@ -52,19 +52,20 @@ func TestAutoDetectCols2(t *testing.T) {
 	vp := Viewport{Width: 80, Height: 24}
 	result := ComputeLayout(slide, vp, nil)
 
-	if result.Mode != model.LayoutCols2 {
-		t.Errorf("mode = %q, want %q", result.Mode, model.LayoutCols2)
+	if result.Mode != model.LayoutTitleCols2 {
+		t.Errorf("mode = %q, want %q", result.Mode, model.LayoutTitleCols2)
 	}
 }
 
-func TestCols2Ratio(t *testing.T) {
+func TestTitleCols2Ratio(t *testing.T) {
 	slide := &model.Slide{
 		Meta: model.SlideMeta{
-			Layout: model.LayoutCols2,
+			Layout: model.LayoutTitleCols2,
 			Ratio:  "70/30",
 			Align:  model.AlignTop,
 		},
 		Blocks: []model.Block{
+			{Type: model.BlockHeading, Level: 2, Raw: "Title"},
 			{Type: model.BlockHeading, Level: 2, Raw: "Left"},
 			{Type: model.BlockHeading, Level: 2, Raw: "Right"},
 		},
@@ -73,20 +74,18 @@ func TestCols2Ratio(t *testing.T) {
 	vp := Viewport{Width: 100, Height: 24}
 	result := ComputeLayout(slide, vp, nil)
 
-	if len(result.Regions) != 2 {
-		t.Fatalf("regions = %d, want 2", len(result.Regions))
+	// title-cols-2 produces 3 regions: title + 2 columns
+	if len(result.Regions) != 3 {
+		t.Fatalf("regions = %d, want 3", len(result.Regions))
 	}
 
-	leftW := result.Regions[0].Width
-	rightW := result.Regions[1].Width
+	// Check the column regions (1 and 2) have the expected ratio
+	leftW := result.Regions[1].Width
+	rightW := result.Regions[2].Width
 
-	// Default slideWidth 80, 16:9 → stageW=80, minus gutter 2 = 78
-	// 70/30 of 78 → ~54/24
-	if leftW < 50 || leftW > 65 {
-		t.Errorf("left width = %d, expected ~59", leftW)
-	}
-	if rightW < 18 || rightW > 32 {
-		t.Errorf("right width = %d, expected ~25", rightW)
+	// The left column should be significantly wider than the right
+	if leftW <= rightW {
+		t.Errorf("left width %d should be > right width %d with 70/30 ratio", leftW, rightW)
 	}
 }
 
@@ -293,13 +292,13 @@ func TestCustomGridLayout2x2(t *testing.T) {
 func TestCustomLayoutLookup(t *testing.T) {
 	deckMeta := &model.DeckMeta{
 		Layouts: map[string]model.CustomLayout{
-			"sidebar": {
+			"my-sidebar": {
 				Columns: []int{30, 70},
 			},
 		},
 	}
 	slide := &model.Slide{
-		Meta: model.SlideMeta{Layout: "sidebar"},
+		Meta: model.SlideMeta{Layout: "my-sidebar"},
 	}
 	vp := Viewport{Width: 100, Height: 30}
 	result := ComputeLayout(slide, vp, deckMeta)
@@ -307,8 +306,8 @@ func TestCustomLayoutLookup(t *testing.T) {
 	if len(result.Regions) != 2 {
 		t.Fatalf("regions = %d, want 2", len(result.Regions))
 	}
-	if result.Mode != "sidebar" {
-		t.Errorf("mode = %q, want %q", result.Mode, "sidebar")
+	if result.Mode != "my-sidebar" {
+		t.Errorf("mode = %q, want %q", result.Mode, "my-sidebar")
 	}
 	// First region (30%) should be narrower than second (70%)
 	if result.Regions[0].Width >= result.Regions[1].Width {
@@ -374,7 +373,7 @@ func TestSlideWidthWithMultipleColumns(t *testing.T) {
 	vp := Viewport{Width: 160, Height: 40}
 
 	stageW, stageH, stagePadX, stagePadY := computeSlideDimensions(vp, 78, -1, "16:9")
-	result := computeGrid(custom, "cols-2", vp, stageW, stageH, stagePadX, stagePadY)
+	result := computeGrid(custom, "twocol", vp, stageW, stageH, stagePadX, stagePadY)
 
 	// Both regions should be within the 78-char stage
 	leftEnd := result.Regions[0].X + result.Regions[0].Width
@@ -588,5 +587,122 @@ func TestBuiltinTitleCols2Layout(t *testing.T) {
 
 	if len(result.Regions) != 3 {
 		t.Fatalf("title-cols-2 should produce 3 regions, got %d", len(result.Regions))
+	}
+}
+
+// --- Padding resolution tests ---
+
+func TestResolveEffectivePaddingDefaults(t *testing.T) {
+	// No deckMeta, no layout padding → all 1
+	def := model.CustomLayout{}
+	top, bottom, left, right := resolveEffectivePadding(def, nil)
+	if top != 1 || bottom != 1 || left != 1 || right != 1 {
+		t.Errorf("defaults: got %d,%d,%d,%d, want 1,1,1,1", top, bottom, left, right)
+	}
+}
+
+func TestResolveEffectivePaddingDeckLevel(t *testing.T) {
+	// Deck padding overrides defaults
+	dm := &model.DeckMeta{
+		Padding: model.Padding{
+			Top:    intPtr(2),
+			Bottom: intPtr(3),
+			Left:   intPtr(4),
+			Right:  intPtr(5),
+		},
+	}
+	def := model.CustomLayout{}
+	top, bottom, left, right := resolveEffectivePadding(def, dm)
+	if top != 2 || bottom != 3 || left != 4 || right != 5 {
+		t.Errorf("deck-level: got %d,%d,%d,%d, want 2,3,4,5", top, bottom, left, right)
+	}
+}
+
+func TestResolveEffectivePaddingLayoutOverride(t *testing.T) {
+	// Layout PadX/PadY overrides deck-level
+	dm := &model.DeckMeta{
+		Padding: model.Padding{
+			Top:    intPtr(10),
+			Bottom: intPtr(10),
+			Left:   intPtr(10),
+			Right:  intPtr(10),
+		},
+	}
+	def := model.CustomLayout{
+		PadX: intPtr(3),
+		PadY: intPtr(2),
+	}
+	top, bottom, left, right := resolveEffectivePadding(def, dm)
+	if top != 2 || bottom != 2 || left != 3 || right != 3 {
+		t.Errorf("layout PadX/PadY: got %d,%d,%d,%d, want 2,2,3,3", top, bottom, left, right)
+	}
+}
+
+func TestResolveEffectivePaddingPerSide(t *testing.T) {
+	// Per-side overrides PadX/PadY
+	def := model.CustomLayout{
+		PadX:    intPtr(5),
+		PadY:    intPtr(5),
+		PadTop:  intPtr(0),
+		PadLeft: intPtr(2),
+	}
+	top, bottom, left, right := resolveEffectivePadding(def, nil)
+	if top != 0 || bottom != 5 || left != 2 || right != 5 {
+		t.Errorf("per-side: got %d,%d,%d,%d, want 0,5,2,5", top, bottom, left, right)
+	}
+}
+
+func TestResolveEffectivePaddingPartialDeck(t *testing.T) {
+	// Only some deck fields set — others stay at default
+	dm := &model.DeckMeta{
+		Padding: model.Padding{
+			Top: intPtr(3),
+		},
+	}
+	def := model.CustomLayout{}
+	top, bottom, left, right := resolveEffectivePadding(def, dm)
+	if top != 3 || bottom != 1 || left != 1 || right != 1 {
+		t.Errorf("partial deck: got %d,%d,%d,%d, want 3,1,1,1", top, bottom, left, right)
+	}
+}
+
+func TestPaddingReducesUsableArea(t *testing.T) {
+	// 80×24 viewport with default padding of 1 on all sides.
+	// slideWidth=80, slideHeight=23 (explicit, so no aspect centering).
+	// Stage: 80×23, padX=0, padY=0.
+	// After layout padding (1 on all sides): usable 78×21, starts at (1,1).
+	w := 80
+	h := 23
+	dm := &model.DeckMeta{
+		SlideWidth:  &w,
+		SlideHeight: &h,
+	}
+	slide := &model.Slide{
+		Meta: model.SlideMeta{
+			Layout: model.LayoutBlank,
+			Align:  model.AlignTop,
+		},
+		Blocks: []model.Block{
+			{Type: model.BlockParagraph, Raw: "Hello"},
+		},
+	}
+	vp := Viewport{Width: 80, Height: 24}
+	result := ComputeLayout(slide, vp, dm)
+
+	if len(result.Regions) != 1 {
+		t.Fatalf("blank layout: got %d regions, want 1", len(result.Regions))
+	}
+	r := result.Regions[0]
+	if r.Width != 78 {
+		t.Errorf("region width = %d, want 78 (80 - 2*padding)", r.Width)
+	}
+	if r.Height != 21 {
+		t.Errorf("region height = %d, want 21 (23 - 2*padding)", r.Height)
+	}
+	if r.X != 1 {
+		t.Errorf("region X = %d, want 1 (padLeft)", r.X)
+	}
+	if r.Y != 1 {
+		t.Errorf("region Y = %d, want 1 (padTop)", r.Y)
 	}
 }

@@ -121,7 +121,7 @@ A per-slide YAML frontmatter block (`---` / YAML / `---`) also starts a new slid
 Content split by headers.
 
 ---
-layout: cols-2
+layout: title-cols-2
 ratio: "50/50"
 ---
 
@@ -138,7 +138,7 @@ Right content.
 This slide splits on the header again.
 ```
 
-The parser automatically absorbs the correct number of headers based on region count. For example, `cols-2` and `sidebar` absorb 2 headers, `cols-3` absorbs 3, `grid-4` absorbs 4. Single-region layouts absorb 1 header. Custom layouts compute regions as cols × rows.
+The parser automatically absorbs the correct number of headers based on region count. For example, `title-body` absorbs 2, `title-cols-2` and `title-rows-2` absorb 3, `title-grid-4` absorbs 5. Single-region layouts (`title`, `section`, `blank`) absorb 1 header. Custom layouts compute regions as cols × rows.
 
 ### Disabling Auto-Split (`autosplit: false`)
 
@@ -199,6 +199,7 @@ slideWidth: 80
 | `safeAnsi` | bool | `true` | Strip non-SGR ANSI sequences |
 | `incrementalLists` | bool | `true` | Reveal list items one at a time |
 | `aspect` | string | `"16:9"` | Target aspect ratio (e.g. `"16:9"`, `"4:3"`) |
+| `padding` | object | all `1` | Global padding for all layouts (see Padding) |
 | `footer` | object | `{}` | Footer bar configuration (see below) |
 | `layouts` | map | `{}` | Custom layout definitions |
 
@@ -258,7 +259,7 @@ Individual slides may begin with YAML frontmatter (after a slide break).
 
 ```yaml
 ---
-layout: cols-2
+layout: title-cols-2
 ratio: "60/40"
 align: top
 ---
@@ -269,14 +270,14 @@ align: top
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `layout` | enum | `"auto"` | Layout mode |
-| `ratio` | string | `""` | Column ratio for `cols-2` (e.g. `"60/40"`) |
+| `ratio` | string | `""` | Column ratio for `title-cols-2` (e.g. `"60/40"`) |
 | `align` | enum | `"top"` | Vertical alignment |
 | `title` | string | `""` | Slide title |
 | `class` | string | `""` | Style class |
 | `autosplit` | bool | `true` | Enable header-based splitting within this slide |
 | `incrementalLists` | bool | inherited | Override deck-level `incrementalLists` for this slide |
 
-**Layout values:** `auto`, `default`, `title`, `center`, `cols-2`, `rows-2`, `terminal`, `sidebar`, `cols-3`, `grid-4`
+**Layout values:** `auto`, `title`, `section`, `title-body`, `title-cols-2`, `title-rows-2`, `title-grid-4`, `blank`
 
 **Align values:** `top`, `middle`, `bottom`
 
@@ -515,20 +516,18 @@ All layouts — built-in and custom — use the same grid engine. Built-in layou
 
 ### Built-in Layouts
 
-All built-in layouts use the same defaults: horizontal padding from aspect ratio, vertical padding of 1, and gutter of 2. No special-case overrides — they behave identically to custom layouts.
+All built-in layouts use the same defaults: padding of 1 on all sides and gutter of 2. No special-case overrides — they behave identically to custom layouts.
 
-| Layout | Grid | Description |
-|--------|------|-------------|
+| Layout | Structure | Description |
+|--------|-----------|-------------|
 | `auto` | (detected) | Automatically detected from content |
-| `default` | 1×1 | Standard single-region, top-aligned |
-| `title` | 1×1 | Centered title slide (large heading) |
-| `center` | 1×1 | Content centered vertically and horizontally |
-| `cols-2` | 2×1 (50/50) | Two columns |
-| `rows-2` | 1×2 (60/40) | Top/bottom split |
-| `terminal` | 1×1 | Single region for code/art |
-| `sidebar` | 2×1 (30/70) | Narrow left panel, wide right panel |
-| `cols-3` | 3×1 (33/34/33) | Three equal columns |
-| `grid-4` | 2×2 (50/50 × 50/50) | Four equal quadrants |
+| `title` | 1 region, centered | Centered title slide (h1 + optional subtitle) |
+| `section` | 1 region, centered | Section header (centered, like title) |
+| `title-body` | title row + 1 body | Title row + single content area |
+| `title-cols-2` | title row + 2 cols | Title row + two columns |
+| `title-rows-2` | title row + 2 rows | Title row + two stacked rows |
+| `title-grid-4` | title row + 2×2 | Title row + four quadrants |
+| `blank` | 1 region, top-aligned | No title, single region, full space |
 
 ### Auto-Detection Heuristics
 
@@ -536,19 +535,21 @@ When `layout: auto` (the default), the layout is chosen as follows:
 
 | Condition | Layout |
 |-----------|--------|
-| Single H1 + minimal text (≤3 blocks) | `title` |
-| Single code/art block (≤2 blocks) | `terminal` |
-| Two major blocks (top-level headings) | `cols-2` |
-| Otherwise | `default` |
+| No blocks | `blank` |
+| H1 present + minimal text (≤3 blocks, headings + ≤1 paragraph) | `title` |
+| No H1 + minimal text (≤3 blocks, headings + ≤1 paragraph) | `section` |
+| Single code/art block (≤2 blocks) | `blank` |
+| Two major blocks (top-level headings) | `title-cols-2` |
+| Otherwise | `title-body` |
 
 ### Column Ratio
 
-The `cols-2` layout defaults to a 50/50 column split. Override per slide:
+The `title-cols-2` layout defaults to a 50/50 column split. Override per slide:
 
 ```yaml
 ---
-layout: cols-2
-ratio: "50/50"
+layout: title-cols-2
+ratio: "60/40"
 ---
 ```
 
@@ -562,9 +563,9 @@ aspect: "4:3"
 ---
 ```
 
-The aspect ratio drives horizontal and vertical padding for all layouts. When the terminal is wider than the target ratio, horizontal padding (pillarbox) is added. When taller, vertical padding (letterbox) is added. Terminal character cells are approximately 1:2 (width:height), so the computation accounts for this cell ratio.
+The aspect ratio controls centering of the content stage within the terminal. When the terminal is wider than the target ratio, horizontal centering padding (pillarbox) is added. When taller, vertical centering padding (letterbox) is added. Terminal character cells are approximately 1:2 (width:height), so the computation accounts for this cell ratio.
 
-When no aspect ratio padding applies (e.g. the terminal already matches the ratio), a small fixed minimum of 2 characters horizontal padding is used so content doesn't touch the terminal edges.
+Layout padding (configurable via the `padding` field or per-layout `padX`/`padY`/`padTop`/`padBottom`/`padLeft`/`padRight`) is applied inside the content stage, independent of aspect ratio centering.
 
 ### Custom Layouts
 
@@ -601,9 +602,44 @@ These fields apply to both custom layouts and built-in overrides:
 | `columns` | `[]int` | `[100]` | Column widths as percentages |
 | `rows` | `[]int` | `[100]` | Row heights as percentages |
 | `gutter` | int | `2` | Gap between cells in characters |
-| `padX` | int | aspect-based | Horizontal padding (from aspect ratio, fallback: 2) |
-| `padY` | int | `1` | Vertical padding |
+| `padX` | int | `1` | Horizontal padding (sets both left and right) |
+| `padY` | int | `1` | Vertical padding (sets both top and bottom) |
+| `padTop` | int | `1` | Top padding |
+| `padBottom` | int | `1` | Bottom padding |
+| `padLeft` | int | `1` | Left padding |
+| `padRight` | int | `1` | Right padding |
 | `align` | enum | `"top"` | Content alignment within cells |
+
+#### Padding
+
+Padding controls the inset between the content stage and the layout regions. It is resolved in priority order (lowest to highest):
+
+1. **Hard-coded default**: 1 on all sides
+2. **Deck-level `padding:`** in deck frontmatter (global override for all layouts)
+3. **Layout-level `padX`/`padY`** convenience fields (set both sides at once)
+4. **Layout-level `padTop`/`padBottom`/`padLeft`/`padRight`** (most specific)
+
+Deck-level global padding:
+```yaml
+---
+padding:
+  top: 2
+  bottom: 2
+  left: 3
+  right: 3
+---
+```
+
+Per-layout override (in deck frontmatter `layouts:` section):
+```yaml
+layouts:
+  blank:
+    padTop: 0
+    padBottom: 0
+  title:
+    padX: 2
+    padTop: 0
+```
 
 #### Grid Region Order
 
@@ -625,11 +661,10 @@ Override any built-in layout's parameters by defining it in your deck frontmatte
 ```yaml
 ---
 layouts:
-  default:
+  title-body:
     padX: 10
     padY: 3
-  cols-2:
-    columns: [50, 50]
+  title-cols-2:
     gutter: 4
 ---
 ```
@@ -751,29 +786,19 @@ Opening remarks go here.
 - **Simple** — just Markdown
 
 ---
-layout: cols-2
+layout: title-cols-2
 ratio: "50/50"
 ---
 
-## Left Side
+## Title
+
+### Left Side
 
 Content for the left column.
 
-## Right Side
+### Right Side
 
 Content for the right column.
-
----
-layout: sidebar
----
-
-## Navigation
-
-Sidebar links.
-
-## Main Content
-
-The main panel.
 
 # Thank You!
 ```

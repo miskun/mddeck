@@ -13,7 +13,7 @@ Terminal-native Markdown slide deck presenter, written in Go. Renders `.mddeck` 
   - `internal/parser/` — `.mddeck` file parser (frontmatter, slides, notes, blocks)
   - `internal/ansi/` — ANSI escape sequence handling and safety filtering
   - `internal/theme/` — Color theme definitions (default, dark, light)
-  - `internal/layout/` — Layout engine (auto, title, center, cols-2, rows-2, cols-3, grid-4, sidebar, terminal)
+  - `internal/layout/` — Layout engine (auto, title, section, title-body, title-cols-2, title-rows-2, title-grid-4, blank)
   - `internal/render/` — Markdown-to-ANSI renderer, presenter view, help overlay
   - `internal/runtime/` — Terminal raw mode, keyboard event loop, navigation
 
@@ -32,7 +32,7 @@ go test ./...                      # run all tests
 
 ## Slide Authoring: Multi-Region Layouts
 
-Multi-region layouts (`cols-2`, `rows-2`, `cols-3`, `grid-4`, `sidebar`, `title-cols-2`, etc.) require multiple content regions. The parser's `mergeRegionChunks` pass automatically absorbs subsequent `---`-separated chunks to fill the required regions. Each absorbed boundary becomes a `BlockRegionBreak` that the layout engine uses to split content into columns/rows.
+Multi-region layouts (`title-body`, `title-cols-2`, `title-rows-2`, `title-grid-4`) require multiple content regions. The parser's `mergeRegionChunks` pass automatically absorbs subsequent `---`-separated chunks to fill the required regions. Each absorbed boundary becomes a `BlockRegionBreak` that the layout engine uses to split content into columns/rows.
 
 This means a `---` between column blocks in a multi-region layout is **not** a slide separator — it is an intentional region boundary that gets merged into the same slide:
 
@@ -53,11 +53,14 @@ Right column content
 The `---` between the two content blocks looks like a slide break but is absorbed as the column boundary. The slide above produces one slide with a title and two columns.
 
 The number of regions consumed depends on the layout:
-- `cols-2`, `rows-2`, `sidebar` → 2 regions
-- `cols-3` → 3 regions
-- `grid-4` → 4 regions
+- `title-body` → 2 regions (1 title + 1 body)
 - `title-cols-2` → 3 regions (1 title + 2 columns)
-- `title-cols-3` → 4 regions (1 title + 3 columns)
+- `title-rows-2` → 3 regions (1 title + 2 rows)
+- `title-grid-4` → 5 regions (1 title + 2×2 grid)
+
+## Layout Padding
+
+All layouts have per-side padding (top, bottom, left, right) that defaults to 1 on all sides. Padding is resolved in priority order: hard-coded default (1) → deck-level `padding:` → layout-level `padX`/`padY` → layout-level `padTop`/`padBottom`/`padLeft`/`padRight`. The `resolveEffectivePadding()` function in `internal/layout/layout.go` implements this resolution. Layout padding is applied inside the content stage (after aspect-ratio centering), not to be confused with the stage centering itself.
 
 ## Debugging & Troubleshooting
 

@@ -36,53 +36,30 @@ func builtinLayouts() map[string]model.CustomLayout {
 	return map[string]model.CustomLayout{
 		"title": {
 			Columns: []int{100},
+			Align:   model.AlignMiddle,
 		},
-		"default": {
+		"section": {
 			Columns: []int{100},
-			PadY:    intPtr(1),
+			Align:   model.AlignMiddle,
 		},
-		"center": {
-			Columns: []int{100},
-			PadY:    intPtr(0),
-		},
-		"cols-2": {
-			Columns: []int{50, 50},
-			PadY:    intPtr(1),
-		},
-		"rows-2": {
-			Rows: []int{60, 40},
-			PadY: intPtr(1),
-		},
-		"terminal": {
-			Columns: []int{100},
-			PadY:    intPtr(1),
-		},
-		"sidebar": {
-			Columns: []int{30, 70},
-			PadY:    intPtr(1),
-		},
-		"cols-3": {
-			Columns: []int{33, 34, 33},
-			PadY:    intPtr(1),
-		},
-		"grid-4": {
-			Columns: []int{50, 50},
-			Rows:    []int{50, 50},
-			PadY:    intPtr(1),
+		"title-body": {
+			Grid: []model.LayoutRow{
+				{Height: -1, Columns: []int{100}},
+				{Columns: []int{100}},
+			},
 		},
 		"title-cols-2": {
 			Grid: []model.LayoutRow{
 				{Height: -1, Columns: []int{100}},
 				{Columns: []int{50, 50}},
 			},
-			PadY: intPtr(1),
 		},
-		"title-cols-3": {
+		"title-rows-2": {
 			Grid: []model.LayoutRow{
 				{Height: -1, Columns: []int{100}},
-				{Columns: []int{33, 34, 33}},
+				{Height: 50, Columns: []int{100}},
+				{Height: 50, Columns: []int{100}},
 			},
-			PadY: intPtr(1),
 		},
 		"title-grid-4": {
 			Grid: []model.LayoutRow{
@@ -90,7 +67,9 @@ func builtinLayouts() map[string]model.CustomLayout {
 				{Columns: []int{50, 50}},
 				{Columns: []int{50, 50}},
 			},
-			PadY: intPtr(1),
+		},
+		"blank": {
+			Columns: []int{100},
 		},
 	}
 }
@@ -117,8 +96,8 @@ func resolveLayout(name string, deckMeta *model.DeckMeta) model.CustomLayout {
 		return base
 	}
 
-	// Unknown layout name → fall back to default
-	return builtins[string(model.LayoutDefault)]
+	// Unknown layout name → fall back to title-body
+	return builtins[string(model.LayoutTitleBody)]
 }
 
 // mergeCustomLayout overlays non-zero fields from override onto base.
@@ -142,10 +121,76 @@ func mergeCustomLayout(base, override model.CustomLayout) model.CustomLayout {
 	if override.PadY != nil {
 		result.PadY = override.PadY
 	}
+	if override.PadTop != nil {
+		result.PadTop = override.PadTop
+	}
+	if override.PadBottom != nil {
+		result.PadBottom = override.PadBottom
+	}
+	if override.PadLeft != nil {
+		result.PadLeft = override.PadLeft
+	}
+	if override.PadRight != nil {
+		result.PadRight = override.PadRight
+	}
 	if override.Align != "" {
 		result.Align = override.Align
 	}
 	return result
+}
+
+// resolveEffectivePadding computes the final per-side padding values.
+// Resolution order (lowest → highest priority):
+//  1. Hard-coded default: 1 on all sides
+//  2. Deck-level global padding (deckMeta.Padding)
+//  3. Layout-level PadX/PadY convenience fields (both sides at once)
+//  4. Layout-level PadTop/PadBottom/PadLeft/PadRight (most specific)
+func resolveEffectivePadding(def model.CustomLayout, deckMeta *model.DeckMeta) (top, bottom, left, right int) {
+	// 1. Hard-coded default
+	top, bottom, left, right = 1, 1, 1, 1
+
+	// 2. Deck-level global padding
+	if deckMeta != nil {
+		p := deckMeta.Padding
+		if p.Top != nil {
+			top = *p.Top
+		}
+		if p.Bottom != nil {
+			bottom = *p.Bottom
+		}
+		if p.Left != nil {
+			left = *p.Left
+		}
+		if p.Right != nil {
+			right = *p.Right
+		}
+	}
+
+	// 3. Layout-level PadX/PadY convenience (overrides deck-level)
+	if def.PadX != nil {
+		left = *def.PadX
+		right = *def.PadX
+	}
+	if def.PadY != nil {
+		top = *def.PadY
+		bottom = *def.PadY
+	}
+
+	// 4. Layout-level per-side (highest priority)
+	if def.PadTop != nil {
+		top = *def.PadTop
+	}
+	if def.PadBottom != nil {
+		bottom = *def.PadBottom
+	}
+	if def.PadLeft != nil {
+		left = *def.PadLeft
+	}
+	if def.PadRight != nil {
+		right = *def.PadRight
+	}
+
+	return
 }
 
 // ComputeLayout determines the layout for a slide.
@@ -174,39 +219,21 @@ func ComputeLayout(slide *model.Slide, vp Viewport, deckMeta *model.DeckMeta) La
 	// Resolve layout definition (builtin, overridden, or custom)
 	def := resolveLayout(string(layout), deckMeta)
 
-	// For cols-2, allow per-slide ratio override
-	if layout == model.LayoutCols2 && slide.Meta.Ratio != "" {
+	// For title-cols-2, allow per-slide ratio override on the content row
+	if layout == model.LayoutTitleCols2 && slide.Meta.Ratio != "" {
 		if l, r, ok := parseRatio(slide.Meta.Ratio); ok {
-			def.Columns = []int{l, r}
+			if len(def.Grid) >= 2 {
+				def.Grid[1].Columns = []int{l, r}
+			}
 		}
 	}
 
-	return computeGrid(def, layout, vp, stageW, stageH, stagePadX, stagePadY)
-}
-
-// computeGrid creates a grid layout from a CustomLayout definition.
-// This is the single layout engine used by all layouts — built-in and custom.
-// stageW and stageH are the pre-computed content stage dimensions.
-// stagePadX and stagePadY position the stage within the viewport.
-func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW, stageH, stagePadX, stagePadY int) LayoutResult {
-	gutter := def.GetGutter()
-
-	// Layout-level padding overrides (additive on top of stage padding)
-	padX := stagePadX
-	padY := stagePadY
-	usableW := stageW
-	usableH := stageH
-
-	// If layout defines explicit padX/padY, they add inner padding to the stage
-	if px := def.GetPadX(); px >= 0 {
-		padX += px
-		usableW -= 2 * px
-	}
-	if py := def.GetPadY(); py >= 0 {
-		padY += py
-		usableH -= 2 * py
-	}
-
+	// Resolve per-side padding and compute usable area
+	padTop, padBottom, padLeft, padRight := resolveEffectivePadding(def, deckMeta)
+	startX := stagePadX + padLeft
+	startY := stagePadY + padTop
+	usableW := stageW - padLeft - padRight
+	usableH := stageH - padTop - padBottom
 	if usableW < 1 {
 		usableW = 1
 	}
@@ -214,9 +241,19 @@ func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW,
 		usableH = 1
 	}
 
+	return computeGrid(def, layout, vp, usableW, usableH, startX, startY)
+}
+
+// computeGrid creates a grid layout from a CustomLayout definition.
+// This is the single layout engine used by all layouts — built-in and custom.
+// stageW and stageH are the pre-computed usable dimensions (padding already subtracted).
+// stagePadX and stagePadY are the start positions (stage centering + padding already applied).
+func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW, stageH, stagePadX, stagePadY int) LayoutResult {
+	gutter := def.GetGutter()
+
 	// Per-row grid mode: each row defines its own columns
 	if len(def.Grid) > 0 {
-		return computePerRowGrid(def.Grid, gutter, name, usableW, usableH, padX, padY)
+		return computePerRowGrid(def.Grid, gutter, name, stageW, stageH, stagePadX, stagePadY)
 	}
 
 	cols := def.Columns
@@ -232,7 +269,7 @@ func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW,
 
 	// Compute column widths from percentages
 	totalGutterX := gutter * (len(cols) - 1)
-	availW := usableW - totalGutterX
+	availW := stageW - totalGutterX
 	if availW < len(cols) {
 		availW = len(cols)
 	}
@@ -240,7 +277,7 @@ func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW,
 
 	// Compute row heights from percentages
 	totalGutterY := gutter * (len(rows) - 1)
-	availH := usableH - totalGutterY
+	availH := stageH - totalGutterY
 	if availH < len(rows) {
 		availH = len(rows)
 	}
@@ -248,9 +285,9 @@ func computeGrid(def model.CustomLayout, name model.Layout, vp Viewport, stageW,
 
 	// Build regions in row-major order
 	var regions []Region
-	curY := padY
+	curY := stagePadY
 	for ri, rh := range rowHeights {
-		curX := padX
+		curX := stagePadX
 		for ci, cw := range colWidths {
 			regions = append(regions, Region{
 				X: curX, Y: curY,
@@ -570,8 +607,9 @@ func distributeSpace(pcts []int, available int) []int {
 func autoDetect(slide *model.Slide) model.Layout {
 	blocks := slide.Blocks
 
+	// 1. No blocks → blank
 	if len(blocks) == 0 {
-		return model.LayoutDefault
+		return model.LayoutBlank
 	}
 
 	h1Count := 0
@@ -591,14 +629,8 @@ func autoDetect(slide *model.Slide) model.Layout {
 		}
 	}
 
-	if h1Count == 1 && totalNonBlank <= 3 {
-		return model.LayoutTitle
-	}
-	// A single heading (any level) with minimal content → title slide.
-	// This catches section dividers produced by header-based splitting
-	// (e.g. "## 01 / THE FINANCIAL REALITY" as a standalone slide),
-	// as well as section headers with a short subtitle paragraph.
-	if totalNonBlank <= 3 {
+	// 2. h1 present + minimal content (headings + ≤1 paragraph only) → title
+	if h1Count >= 1 && totalNonBlank <= 3 {
 		headingCount := 0
 		paragraphCount := 0
 		for _, b := range blocks {
@@ -617,14 +649,40 @@ func autoDetect(slide *model.Slide) model.Layout {
 			return model.LayoutTitle
 		}
 	}
-	if artCodeCount == 1 && totalNonBlank <= 2 {
-		return model.LayoutTerminal
-	}
-	if majorBlocks == 2 {
-		return model.LayoutCols2
+
+	// 3. No h1 + minimal content (headings + ≤1 paragraph only) → section
+	if h1Count == 0 && totalNonBlank <= 3 {
+		headingCount := 0
+		paragraphCount := 0
+		for _, b := range blocks {
+			switch b.Type {
+			case model.BlockHeading:
+				headingCount++
+			case model.BlockParagraph:
+				paragraphCount++
+			case model.BlockHorizontalRule:
+				// ignore
+			default:
+				headingCount = -1 // disqualify
+			}
+		}
+		if headingCount >= 1 && paragraphCount <= 1 {
+			return model.LayoutSection
+		}
 	}
 
-	return model.LayoutDefault
+	// 4. Single code/art block + ≤2 total blocks → blank
+	if artCodeCount == 1 && totalNonBlank <= 2 {
+		return model.LayoutBlank
+	}
+
+	// 5. 2 major blocks → title-cols-2
+	if majorBlocks == 2 {
+		return model.LayoutTitleCols2
+	}
+
+	// 6. Default → title-body
+	return model.LayoutTitleBody
 }
 
 // countMajorBlocks counts the number of major blocks (top-level heading + content

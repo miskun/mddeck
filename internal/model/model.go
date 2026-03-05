@@ -5,19 +5,14 @@ package model
 type Layout string
 
 const (
-	LayoutAuto      Layout = "auto"
-	LayoutDefault   Layout = "default"
-	LayoutTitle     Layout = "title"
-	LayoutCenter    Layout = "center"
-	LayoutCols2     Layout = "cols-2"
-	LayoutRows2     Layout = "rows-2"
-	LayoutTerminal  Layout = "terminal"
-	LayoutSidebar   Layout = "sidebar"
-	LayoutCols3     Layout = "cols-3"
-	LayoutGrid4     Layout = "grid-4"
+	LayoutAuto       Layout = "auto"
+	LayoutTitle      Layout = "title"
+	LayoutSection    Layout = "section"
+	LayoutTitleBody  Layout = "title-body"
 	LayoutTitleCols2 Layout = "title-cols-2"
-	LayoutTitleCols3 Layout = "title-cols-3"
+	LayoutTitleRows2 Layout = "title-rows-2"
 	LayoutTitleGrid4 Layout = "title-grid-4"
+	LayoutBlank      Layout = "blank"
 )
 
 // Align represents vertical alignment within a layout region.
@@ -28,6 +23,14 @@ const (
 	AlignMiddle Align = "middle"
 	AlignBottom Align = "bottom"
 )
+
+// Padding defines per-side padding values. Nil fields inherit from lower-priority sources.
+type Padding struct {
+	Top    *int `yaml:"top"`
+	Bottom *int `yaml:"bottom"`
+	Left   *int `yaml:"left"`
+	Right  *int `yaml:"right"`
+}
 
 // DeckMeta holds deck-level frontmatter.
 type DeckMeta struct {
@@ -42,6 +45,7 @@ type DeckMeta struct {
 	IncrementalLists *bool                    `yaml:"incrementalLists"` // auto-reveal list items one by one (default false)
 	DisableReveal    *bool                    `yaml:"disableReveal"`    // disable all reveal effects (pause markers + incremental lists)
 	Layouts          map[string]CustomLayout  `yaml:"layouts"`          // user-defined or overridden layouts
+	Padding          Padding                  `yaml:"padding"`          // global padding for all layouts
 	Footer           Footer                   `yaml:"footer"`           // configurable footer sections
 }
 
@@ -65,9 +69,13 @@ type CustomLayout struct {
 	Rows    []int       `yaml:"rows"`    // row heights as percentages, e.g. [60, 40]
 	Grid    []LayoutRow `yaml:"grid"`    // per-row column definitions (overrides columns/rows)
 	Gutter  *int        `yaml:"gutter"`  // gap between cells in characters (default: 2)
-	PadX    *int        `yaml:"padX"`    // horizontal padding override
-	PadY    *int        `yaml:"padY"`    // vertical padding override
-	Align   Align       `yaml:"align"`   // content alignment within cells
+	PadX      *int        `yaml:"padX"`      // horizontal padding override (sets both left and right)
+	PadY      *int        `yaml:"padY"`      // vertical padding override (sets both top and bottom)
+	PadTop    *int        `yaml:"padTop"`    // top padding override
+	PadBottom *int        `yaml:"padBottom"` // bottom padding override
+	PadLeft   *int        `yaml:"padLeft"`   // left padding override
+	PadRight  *int        `yaml:"padRight"`  // right padding override
+	Align     Align       `yaml:"align"`     // content alignment within cells
 }
 
 // LayoutRow defines a single row in a grid layout with its own column structure.
