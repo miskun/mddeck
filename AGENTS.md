@@ -24,6 +24,8 @@ go build -o mddeck ./cmd/mddeck/  # build binary (always use -o to produce fresh
 go test ./...                      # run all tests
 ./mddeck example.md               # run with sample deck
 ./mddeck --present example.md     # presenter mode
+./mddeck --dump example.md        # dump all slides as text to stdout
+./mddeck --dump --format json example.md  # dump as structured JSON
 ```
 
 **Important:** `go build ./...` only checks compilation — it does NOT write an output binary. Always use `go build -o mddeck ./cmd/mddeck/` to produce a runnable binary. Do this after every code change so `./mddeck` is always up to date.
@@ -56,6 +58,32 @@ The number of regions consumed depends on the layout:
 - `grid-4` → 4 regions
 - `title-cols-2` → 3 regions (1 title + 2 columns)
 - `title-cols-3` → 4 regions (1 title + 3 columns)
+
+## Debugging & Troubleshooting
+
+Use `--dump` mode to inspect parsed slide data without launching the TUI. This is the fastest way to verify what the parser produced, check block types, confirm reveal steps, or debug layout issues.
+
+```bash
+# Text dump of a single slide (1-based index)
+./mddeck --dump --slide 3 example.md
+
+# JSON dump — pipe to jq for targeted queries
+./mddeck --dump --format json example.md | jq '.slides[0].blocks'
+
+# Check block types across the whole deck
+./mddeck --dump --format json example.md | jq '[.slides[].blocks[].type] | unique'
+
+# Verify reveal steps on a specific slide
+./mddeck --dump --format json --slide 5 example.md | jq '.slides[0].steps, [.slides[0].blocks[] | {type, step}]'
+```
+
+Virtual viewport flags (`--width`, `--height`) force specific terminal dimensions in both dump and TUI modes. Use them for deterministic rendering in tests or to simulate specific terminal sizes:
+
+```bash
+./mddeck --width 120 --height 40 example.md          # TUI at fixed size
+```
+
+When `--dump` is set, `--present`, `--watch`, and `--start` are ignored — it outputs to stdout and exits immediately.
 
 ## Code Conventions
 

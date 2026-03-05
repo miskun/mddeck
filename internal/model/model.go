@@ -223,6 +223,42 @@ const (
 	BlockRegionBreak // region divider for multi-region layouts (not rendered)
 )
 
+// String returns a human-readable kebab-case name for a BlockType.
+func (bt BlockType) String() string {
+	switch bt {
+	case BlockParagraph:
+		return "paragraph"
+	case BlockHeading:
+		return "heading"
+	case BlockUnorderedList:
+		return "unordered-list"
+	case BlockOrderedList:
+		return "ordered-list"
+	case BlockBlockquote:
+		return "blockquote"
+	case BlockFencedCode:
+		return "fenced-code"
+	case BlockHorizontalRule:
+		return "horizontal-rule"
+	case BlockANSIArt:
+		return "ansi-art"
+	case BlockASCIIArt:
+		return "ascii-art"
+	case BlockBrailleArt:
+		return "braille-art"
+	case BlockTaskList:
+		return "task-list"
+	case BlockTable:
+		return "table"
+	case BlockAlert:
+		return "alert"
+	case BlockRegionBreak:
+		return "region-break"
+	default:
+		return "unknown"
+	}
+}
+
 // Block represents a parsed content block.
 type Block struct {
 	Type     BlockType

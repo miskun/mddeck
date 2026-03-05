@@ -596,16 +596,24 @@ func autoDetect(slide *model.Slide) model.Layout {
 	}
 	// A single heading (any level) with minimal content → title slide.
 	// This catches section dividers produced by header-based splitting
-	// (e.g. "## 01 / THE FINANCIAL REALITY" as a standalone slide).
-	if totalNonBlank <= 2 {
-		headingOnly := true
+	// (e.g. "## 01 / THE FINANCIAL REALITY" as a standalone slide),
+	// as well as section headers with a short subtitle paragraph.
+	if totalNonBlank <= 3 {
+		headingCount := 0
+		paragraphCount := 0
 		for _, b := range blocks {
-			if b.Type != model.BlockHeading && b.Type != model.BlockHorizontalRule {
-				headingOnly = false
-				break
+			switch b.Type {
+			case model.BlockHeading:
+				headingCount++
+			case model.BlockParagraph:
+				paragraphCount++
+			case model.BlockHorizontalRule:
+				// ignore
+			default:
+				headingCount = -1 // disqualify
 			}
 		}
-		if headingOnly {
+		if headingCount >= 1 && paragraphCount <= 1 {
 			return model.LayoutTitle
 		}
 	}

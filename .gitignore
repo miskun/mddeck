@@ -10,6 +10,9 @@
 *.test
 *.out
 
+# Claude Code
+.claude/settings.local.json
+
 # IDE
 .idea/
 .vscode/
