@@ -126,7 +126,7 @@ func TestSlideFrontmatter(t *testing.T) {
 ---
 
 ---
-layout: cols-2
+layout: title-cols-2
 ratio: "60/40"
 align: top
 ---
@@ -145,8 +145,8 @@ align: top
 	}
 
 	slide := deck.Slides[1]
-	if slide.Meta.Layout != model.LayoutCols2 {
-		t.Errorf("layout = %q, want %q", slide.Meta.Layout, model.LayoutCols2)
+	if slide.Meta.Layout != model.LayoutTitleCols2 {
+		t.Errorf("layout = %q, want %q", slide.Meta.Layout, model.LayoutTitleCols2)
 	}
 	if slide.Meta.Ratio != "60/40" {
 		t.Errorf("ratio = %q, want %q", slide.Meta.Ratio, "60/40")
@@ -601,6 +601,7 @@ func TestFrontmatterAsSlideBreak(t *testing.T) {
 	// Mix of header-based splitting and frontmatter blocks.
 	// No --- slide breaks, so header splitting activates.
 	// Frontmatter blocks should also start new slides.
+	// title-cols-2 absorbs 3 headers (1 title + 2 columns).
 	input := `## Slide One
 
 First content.
@@ -610,9 +611,11 @@ First content.
 Second content.
 
 ---
-layout: cols-2
+layout: title-cols-2
 ratio: "50/50"
 ---
+
+## Title Row
 
 ## Left Column
 
@@ -622,7 +625,7 @@ Left text.
 
 Right text.
 
-## Slide Four
+## Slide Five
 
 Back to normal.
 `
@@ -632,8 +635,14 @@ Back to normal.
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Expect: Slide One, Slide Two, cols-2 slide (Left+Right), Slide Four
+	// Expect: Slide One, Slide Two, title-cols-2 slide (Title+Left+Right), Slide Five
 	if len(deck.Slides) != 4 {
+		for i, s := range deck.Slides {
+			t.Logf("slide %d: blocks=%d layout=%v", i, len(s.Blocks), s.Meta.Layout)
+			for _, b := range s.Blocks {
+				t.Logf("  type=%d level=%d raw=%q", b.Type, b.Level, b.Raw)
+			}
+		}
 		t.Fatalf("got %d slides, want 4", len(deck.Slides))
 	}
 
@@ -642,9 +651,9 @@ Back to normal.
 		t.Error("slide 1 should have blocks")
 	}
 
-	// Slide 3: should have cols-2 layout from frontmatter
-	if deck.Slides[2].Meta.Layout != model.LayoutCols2 {
-		t.Errorf("slide 3 layout = %v, want cols-2", deck.Slides[2].Meta.Layout)
+	// Slide 3: should have title-cols-2 layout from frontmatter
+	if deck.Slides[2].Meta.Layout != model.LayoutTitleCols2 {
+		t.Errorf("slide 3 layout = %v, want title-cols-2", deck.Slides[2].Meta.Layout)
 	}
 
 	// Slide 4: back to normal
@@ -659,16 +668,16 @@ func TestFrontmatterOnlyNoHeaders(t *testing.T) {
 	input := `Some introductory text.
 
 ---
-layout: terminal
+layout: blank
 ---
 
-Terminal content here.
+Blank content here.
 
 ---
-layout: center
+layout: section
 ---
 
-Centered content.
+Section content.
 `
 
 	deck, err := Parse(input)
@@ -680,8 +689,8 @@ Centered content.
 		t.Fatalf("got %d slides, want 3", len(deck.Slides))
 	}
 
-	if deck.Slides[1].Meta.Layout != model.LayoutTerminal {
-		t.Errorf("slide 2 layout = %v, want terminal", deck.Slides[1].Meta.Layout)
+	if deck.Slides[1].Meta.Layout != model.LayoutBlank {
+		t.Errorf("slide 2 layout = %v, want blank", deck.Slides[1].Meta.Layout)
 	}
 }
 
@@ -1220,12 +1229,12 @@ layout: title-cols-2
 }
 
 func TestRegionBreakCols2NoHeaders(t *testing.T) {
-	// 0 headings + 1 region break → 2 sections for cols-2.
+	// 0 headings + 1 region break → 3 sections for title-cols-2.
 	input := `---
 title: test
 ---
 ---
-layout: cols-2
+layout: title-cols-2
 ---
 
 Left side content
@@ -1294,13 +1303,14 @@ This is a separate slide`
 }
 
 func TestRegionBreakMixedWithHeaders(t *testing.T) {
-	// 1 heading + 1 region break for cols-2 (needs 2 sections) = enough.
+	// 1 heading + 1 region break for title-cols-2 (needs 3 sections).
+	// We have 1 heading (= 1 section) + title auto-split = 2, so we absorb 1 chunk.
 	// The third chunk stays separate.
 	input := `---
 title: test
 ---
 ---
-layout: cols-2
+layout: title-cols-2
 ---
 ## Left Side
 
@@ -1318,8 +1328,8 @@ Separate slide`
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// The layout needs 2 regions. We have 1 heading (= 1 section) so we
-	// absorb 1 more chunk.  The third chunk is a separate slide.
+	// The layout needs 3 regions. We have 1 heading with content (= 2 majors via title auto-split)
+	// so we absorb 1 more chunk. The third chunk is a separate slide.
 	if len(deck.Slides) != 2 {
 		t.Fatalf("slides = %d, want 2", len(deck.Slides))
 	}

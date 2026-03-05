@@ -53,7 +53,7 @@ these lines merge into one paragraph.
 
 ---
 autosplit: false
-layout: default
+layout: title-body
 ---
 
 ### Heading Levels
@@ -75,7 +75,7 @@ autosplit: true
 ## 03 / LISTS
 
 ---
-layout: cols-2
+layout: title-cols-2
 ratio: "55/45"
 incrementalLists: false
 ---
@@ -182,7 +182,7 @@ ANSI art blocks parse escape sequences (`\033[...m`, `\e[...m`, `\x1b[...m`) and
 ## 07 / ASCII & BRAILLE ART
 
 ---
-layout: cols-2
+layout: title-cols-2
 incrementalLists: false
 ---
 
@@ -299,118 +299,72 @@ ___
 Content below.
 
 ---
-layout: cols-2
+layout: title-cols-2
 ---
 
 ## 11 / TWO-COLUMN LAYOUT
 
-Use `layout: cols-2` in slide frontmatter. Content distributes across columns by major blocks (heading + content).
+Use `layout: title-cols-2` in slide frontmatter. Title row on top, content distributes across two columns below.
 
 ```yaml
 ---
-layout: cols-2
+layout: title-cols-2
 ratio: "60/40"
 ---
 ```
 
 - Default ratio: 50/50
 - Custom via `ratio: "70/30"`
-- Each column is a separate region
+- Title row + two content columns
 
 ### Right Column
 
 ```ascii
-  ┌──────────┬──────────┐
-  │          │          │
-  │  Left    │  Right   │
-  │  Column  │  Column  │
-  │          │          │
-  └──────────┴──────────┘
+  ┌──────────────────────┐
+  │       Title Row      │
+  ├──────────┬───────────┤
+  │  Left    │  Right    │
+  │  Column  │  Column   │
+  └──────────┴───────────┘
 ```
 
 ---
-layout: rows-2
+layout: title-rows-2
 ---
 
-## Top Region — `rows-2`
+## Top Region — `title-rows-2`
 
-Horizontal split: top region (60%) and bottom region (40%). Great for showing a concept above and details below.
+Title row on top, then two stacked content rows. Great for showing a concept above and details below.
 
-## Bottom Region
+## Middle Row
+
+Content in the first row.
+
+## Bottom Row
 
 ```ascii
   ┌──────────────────────┐
-  │     Top Region       │
+  │     Title Row        │
   ├──────────────────────┤
-  │   Bottom Region      │
+  │     Row 1            │
+  ├──────────────────────┤
+  │     Row 2            │
   └──────────────────────┘
 ```
 
 ---
-layout: sidebar
+layout: title-grid-4
 ---
 
-### Sidebar
-
-Quick links:
-
-- Intro
-- Styling
-- Lists
-- Code
-- Art
-- Tables
-- Layouts
-
-### Main Content Area
-
-The **sidebar** layout uses a `30/70` column split. The narrow left panel works well for navigation, table of contents, or metadata.
-
-Content in the wider right panel has room for longer text, code blocks, and diagrams.
-
-```ascii
-  ┌─────┬────────────────┐
-  │     │                │
-  │ Nav │    Content     │
-  │     │                │
-  └─────┴────────────────┘
-```
-
----
-layout: cols-3
----
-
-### Column A
-
-Three equal columns for comparison layouts.
-
-Each gets ~33% width.
-
-### Column B
-
-All three columns get the same treatment and styling.
-
-Use for feature comparisons or team structures.
-
-### Column C
-
-Headers distribute automatically across regions.
-
-```
-layout: cols-3
-```
-
----
-layout: grid-4
----
+## 2×2 Grid — `title-grid-4`
 
 ### Top Left
 
-Four-quadrant grid.
+Title row + four quadrants.
 
 ### Top Right
 
-50/50 columns × 50/50 rows.
+50/50 columns × 50/50 rows below the title.
 
 ### Bottom Left
 
@@ -419,14 +373,12 @@ Great for dashboards or comparison matrices.
 ### Bottom Right
 
 ```
-layout: grid-4
+layout: title-grid-4
 ```
 
 ---
-layout: terminal
+layout: blank
 ---
-
-## Terminal Layout
 
 ```ascii
 ╔═════════════════════════════════════════════════════════════════════════╗
@@ -444,13 +396,13 @@ layout: terminal
 ╚═════════════════════════════════════════════════════════════════════════╝
 ```
 
-Full viewport width — ideal for code demos and ASCII art.
+Blank layout — no title row, full space. Ideal for code demos and ASCII art.
 
 ---
-layout: center
+layout: section
 ---
 
-## Centered Layout
+## Section Header
 
 Content is centered both vertically and horizontally.
 
@@ -509,8 +461,8 @@ Toggle with `t`. The timer in the corner tracks elapsed time.
 
 ```yaml
 ---
-layout: cols-2          # layout mode
-ratio: "60/40"          # column ratio (cols-2 only)
+layout: title-cols-2    # layout mode
+ratio: "60/40"          # column ratio (title-cols-2 only)
 align: middle           # vertical alignment
 autosplit: false         # disable header splitting
 incrementalLists: false  # disable per-slide
@@ -530,7 +482,7 @@ Three built-in themes:
 Set via `--theme` flag or `theme:` in deck frontmatter.
 
 ---
-layout: center
+layout: section
 ---
 
 ## Keyboard Shortcuts
@@ -546,7 +498,7 @@ layout: center
 | `q` | Quit |
 
 ---
-layout: center
+layout: section
 ---
 
 ## Thank You!

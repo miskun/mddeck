@@ -392,9 +392,9 @@ func isSlideFrontmatter(lines []string, idx int) (endIdx int, ok bool) {
 // computeHeadersToSkip determines how many subsequent headers a slide
 // frontmatter should absorb based on its layout.
 // For custom layouts, it computes cols × rows from the layout definition.
-// For built-in multi-region layouts (cols-2, rows-2, sidebar), returns 2.
-// For other built-in layouts, returns 1.
-// If no layout is specified, returns 0 (resume marker).
+// For built-in multi-region layouts (title-body, title-cols-2, etc.), returns the region count.
+// For single-region layouts (title, section, blank), returns 1.
+// If no layout is specified, returns 1 (settings-only frontmatter).
 func computeHeadersToSkip(fmYAML string, layouts map[string]model.CustomLayout) int {
 	// Extract layout value from the YAML
 	layoutName := ""
@@ -442,21 +442,17 @@ func computeHeadersToSkip(fmYAML string, layouts map[string]model.CustomLayout) 
 
 	// Built-in multi-region layouts
 	switch layoutName {
-	case "cols-2", "rows-2", "sidebar":
-		return 2
-	case "cols-3":
-		return 3
-	case "grid-4":
-		return 4
+	case "title-body":
+		return 2 // 1 title + 1 body
 	case "title-cols-2":
 		return 3 // 1 title + 2 columns
-	case "title-cols-3":
-		return 4 // 1 title + 3 columns
+	case "title-rows-2":
+		return 3 // 1 title + 2 rows
 	case "title-grid-4":
 		return 5 // 1 title + 2×2 grid
 	}
 
-	// Other built-in layouts (title, default, center, terminal)
+	// title, section, blank → 1 region
 	return 1
 }
 

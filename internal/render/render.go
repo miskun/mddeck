@@ -85,9 +85,7 @@ func (r *Renderer) RenderSlide(slide *model.Slide, vp layout.Viewport, step int)
 	}
 
 	switch lr.Mode {
-	case model.LayoutTitle:
-		r.renderTitle(visSlide, lr.Regions[0], scr)
-	case model.LayoutCenter:
+	case model.LayoutTitle, model.LayoutSection:
 		r.renderCentered(visSlide, lr.Regions[0], scr)
 	default:
 		// All layouts (built-in and custom) use the same grid renderer.
@@ -147,34 +145,7 @@ func (r *Renderer) RenderSlide(slide *model.Slide, vp layout.Viewport, step int)
 	return scr.Lines()
 }
 
-// renderTitle renders a title-layout slide (centered vertically and horizontally).
-func (r *Renderer) renderTitle(slide *model.Slide, region layout.Region, scr *screenBuf) {
-	lines := r.renderBlocks(slide.Blocks, region.Width)
-
-	// Center vertically
-	startY := region.Y + (region.Height-len(lines))/2
-	if startY < region.Y {
-		startY = region.Y
-	}
-
-	for i, line := range lines {
-		if i >= region.Height {
-			break
-		}
-		row := startY + i
-		// Crop to region width to prevent terminal auto-wrap
-		line = r.cropLine(line, region.Width)
-		// Center horizontally
-		visLen := a.VisibleLen(line)
-		padLeft := (region.Width - visLen) / 2
-		if padLeft < 0 {
-			padLeft = 0
-		}
-		scr.Set(row, region.X+padLeft, line)
-	}
-}
-
-// renderCentered renders a center-layout slide (centered vertically and horizontally).
+// renderCentered renders a centered-layout slide (centered vertically and horizontally).
 func (r *Renderer) renderCentered(slide *model.Slide, region layout.Region, scr *screenBuf) {
 	lines := r.renderBlocks(slide.Blocks, region.Width)
 
