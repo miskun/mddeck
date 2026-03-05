@@ -16,8 +16,9 @@ type Region struct {
 
 // LayoutResult describes how a slide should be rendered.
 type LayoutResult struct {
-	Mode    model.Layout
-	Regions []Region
+	Mode        model.Layout
+	Regions     []Region
+	HasTitleRow bool // first row is a dedicated title region (1 column, fixed height)
 }
 
 // Viewport describes the terminal dimensions.
@@ -326,6 +327,9 @@ func computePerRowGrid(grid []model.LayoutRow, gutter int, name model.Layout, us
 		}
 	}
 
+	// Detect title row: first row is single-column with fixed height of 1.
+	hasTitleRow := len(grid) > 1 && len(grid[0].Columns) <= 1 && grid[0].Height < 0
+
 	// Build regions row by row, each with its own column widths
 	var regions []Region
 	curY := padY
@@ -361,8 +365,9 @@ func computePerRowGrid(grid []model.LayoutRow, gutter int, name model.Layout, us
 	}
 
 	return LayoutResult{
-		Mode:    name,
-		Regions: regions,
+		Mode:        name,
+		Regions:     regions,
+		HasTitleRow: hasTitleRow,
 	}
 }
 
@@ -614,11 +619,15 @@ func autoDetect(slide *model.Slide) model.Layout {
 	return model.LayoutDefault
 }
 
-// countMajorBlocks counts the number of major blocks (top-level heading + content).
+// countMajorBlocks counts the number of major blocks (top-level heading + content
+// or region break boundaries).
 func countMajorBlocks(blocks []model.Block) int {
 	count := 0
 	for _, b := range blocks {
 		if b.Type == model.BlockHeading && b.Level <= 2 {
+			count++
+		}
+		if b.Type == model.BlockRegionBreak {
 			count++
 		}
 	}
@@ -643,11 +652,21 @@ func parseRatio(s string) (int, int, bool) {
 }
 
 // SplitBlocksIntoMajor groups blocks into major blocks for multi-region layouts.
+// Splits occur on headings and on region break markers (BlockRegionBreak).
 func SplitBlocksIntoMajor(blocks []model.Block) []model.MajorBlock {
 	var majors []model.MajorBlock
 	var current *model.MajorBlock
 
 	for _, b := range blocks {
+		if b.Type == model.BlockRegionBreak {
+			// Region break: flush current major block and start a new
+			// headingless one.  The break itself is consumed.
+			if current != nil {
+				majors = append(majors, *current)
+			}
+			current = nil
+			continue
+		}
 		if b.Type == model.BlockHeading {
 			if current != nil {
 				majors = append(majors, *current)

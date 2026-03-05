@@ -28,6 +28,35 @@ go test ./...                      # run all tests
 
 **Important:** `go build ./...` only checks compilation — it does NOT write an output binary. Always use `go build -o mddeck ./cmd/mddeck/` to produce a runnable binary. Do this after every code change so `./mddeck` is always up to date.
 
+## Slide Authoring: Multi-Region Layouts
+
+Multi-region layouts (`cols-2`, `rows-2`, `cols-3`, `grid-4`, `sidebar`, `title-cols-2`, etc.) require multiple content regions. The parser's `mergeRegionChunks` pass automatically absorbs subsequent `---`-separated chunks to fill the required regions. Each absorbed boundary becomes a `BlockRegionBreak` that the layout engine uses to split content into columns/rows.
+
+This means a `---` between column blocks in a multi-region layout is **not** a slide separator — it is an intentional region boundary that gets merged into the same slide:
+
+```markdown
+---
+layout: title-cols-2
+---
+
+## Slide Title
+
+Left column content
+
+---
+
+Right column content
+```
+
+The `---` between the two content blocks looks like a slide break but is absorbed as the column boundary. The slide above produces one slide with a title and two columns.
+
+The number of regions consumed depends on the layout:
+- `cols-2`, `rows-2`, `sidebar` → 2 regions
+- `cols-3` → 3 regions
+- `grid-4` → 4 regions
+- `title-cols-2` → 3 regions (1 title + 2 columns)
+- `title-cols-3` → 4 regions (1 title + 3 columns)
+
 ## Code Conventions
 
 - Standard Go project layout (`cmd/`, `internal/`)

@@ -82,6 +82,13 @@ func Parse(content string) (*model.Deck, error) {
 	}
 	slideTexts = expanded
 
+	// Merge pass: re-combine ---separated slides when a layout needs more
+	// regions than the slide has split points.  Each absorbed boundary
+	// becomes a <!--MDDECK:REGION--> sentinel that parseBlocks later turns
+	// into a BlockRegionBreak.  Runs AFTER header-splitting so that
+	// frontmatter slides are properly isolated.
+	slideTexts = mergeRegionChunks(slideTexts, deck.Meta.Layouts)
+
 	for i, text := range slideTexts {
 		slide, err := parseSlide(text, i)
 		if err != nil {
@@ -453,6 +460,212 @@ func computeHeadersToSkip(fmYAML string, layouts map[string]model.CustomLayout) 
 	return 1
 }
 
+// regionSentinel is inserted at merge boundaries between ---separated chunks
+// that are re-combined for multi-region layouts.  parseBlocks converts it
+// into a BlockRegionBreak.
+const regionSentinel = "<!--MDDECK:REGION-->"
+
+// mergeRegionChunks re-combines ---separated chunks when a slide's layout
+// requires more regions than the chunk has heading-based split points.
+// Each absorbed chunk boundary becomes a regionSentinel line.
+func mergeRegionChunks(chunks []string, layouts map[string]model.CustomLayout) []string {
+	var result []string
+
+	i := 0
+	for i < len(chunks) {
+		chunk := chunks[i]
+
+		// Extract frontmatter YAML from this chunk (if any).
+		fmYAML := extractFrontmatterYAML(chunk)
+		if fmYAML == "" {
+			result = append(result, chunk)
+			i++
+			continue
+		}
+
+		regionCount := computeHeadersToSkip(fmYAML, layouts)
+		if regionCount <= 1 {
+			result = append(result, chunk)
+			i++
+			continue
+		}
+
+		// Count headings already in this chunk (outside fenced blocks).
+		headings := countHeadingsInText(chunk)
+
+		// Compute how many major blocks the current content will produce.
+		// Each heading creates 1 major.  If no headings, content = 1 major.
+		// For title-row layouts (title-cols-2 etc.), a heading with content
+		// after it will be auto-split into 2 majors (title + body), so we
+		// count an extra major when that applies.
+		currentMajors := headings
+		if currentMajors == 0 {
+			currentMajors = 1
+		}
+		layoutName := extractLayoutName(fmYAML)
+		isTitleLayout := strings.HasPrefix(layoutName, "title-")
+		if isTitleLayout && headings > 0 && headingHasContentAfter(chunk) {
+			currentMajors++
+		}
+		needed := regionCount - currentMajors
+		if needed <= 0 {
+			result = append(result, chunk)
+			i++
+			continue
+		}
+
+		// Absorb subsequent chunks that don't have their own frontmatter
+		// and don't start with a heading (which indicates a standalone
+		// slide from header-based splitting).
+		merged := chunk
+		j := i + 1
+		absorbed := 0
+		for j < len(chunks) && absorbed < needed {
+			next := chunks[j]
+			if extractFrontmatterYAML(next) != "" {
+				break
+			}
+			if chunkStartsWithHeading(next) {
+				break
+			}
+			merged += "\n" + regionSentinel + "\n" + next
+			absorbed++
+			j++
+		}
+
+		result = append(result, merged)
+		i = j
+	}
+
+	return result
+}
+
+// extractFrontmatterYAML returns the YAML content of a slide frontmatter
+// block at the start of text, or "" if none is present.
+func extractFrontmatterYAML(text string) string {
+	lines := strings.Split(text, "\n")
+	if len(lines) == 0 {
+		return ""
+	}
+	// Find the start of frontmatter (skip leading blank lines)
+	start := -1
+	for k, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if strings.TrimSpace(line) == "---" {
+			start = k
+		}
+		break
+	}
+	if start < 0 {
+		return ""
+	}
+	// Find closing ---
+	hasYAML := false
+	for k := start + 1; k < len(lines) && k-start <= 20; k++ {
+		trimmed := strings.TrimSpace(lines[k])
+		if trimmed == "---" {
+			if hasYAML {
+				return strings.Join(lines[start+1:k], "\n")
+			}
+			return ""
+		}
+		if strings.Contains(trimmed, ":") {
+			hasYAML = true
+		}
+	}
+	return ""
+}
+
+// countHeadingsInText counts markdown headings in text, skipping fenced blocks.
+func countHeadingsInText(text string) int {
+	count := 0
+	inFence := false
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		if headerLevel(trimmed) > 0 {
+			count++
+		}
+	}
+	return count
+}
+
+// extractLayoutName returns the layout name from frontmatter YAML, or "".
+func extractLayoutName(fmYAML string) string {
+	for _, line := range strings.Split(fmYAML, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "layout:") {
+			val := strings.TrimPrefix(line, "layout:")
+			name := strings.TrimSpace(val)
+			return strings.Trim(name, "\"'")
+		}
+	}
+	return ""
+}
+
+// headingHasContentAfter returns true if the first heading in text has
+// non-heading, non-blank content after it (before the next heading or end).
+func headingHasContentAfter(text string) bool {
+	foundHeading := false
+	inFence := false
+	inFrontmatter := false
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		// Skip frontmatter blocks
+		if trimmed == "---" {
+			inFrontmatter = !inFrontmatter
+			continue
+		}
+		if inFrontmatter {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "```") {
+			inFence = !inFence
+			if foundHeading {
+				return true // fenced block = content
+			}
+			continue
+		}
+		if inFence {
+			continue
+		}
+		if !foundHeading {
+			if headerLevel(trimmed) > 0 {
+				foundHeading = true
+			}
+			continue
+		}
+		if trimmed == "" {
+			continue
+		}
+		if headerLevel(trimmed) > 0 {
+			return false // next heading before any content
+		}
+		return true // non-blank, non-heading content found
+	}
+	return false
+}
+
+// chunkStartsWithHeading returns true if the first non-blank line is a heading.
+func chunkStartsWithHeading(text string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		return headerLevel(trimmed) > 0
+	}
+	return false
+}
+
 // or 0 if the line is not a heading.
 func headerLevel(line string) int {
 	if !strings.HasPrefix(line, "#") {
@@ -574,6 +787,13 @@ func parseBlocks(lines []string) []model.Block {
 				i++
 				continue
 			}
+		}
+
+		// Region break sentinel (inserted by mergeRegionChunks)
+		if trimmed == regionSentinel {
+			blocks = append(blocks, model.Block{Type: model.BlockRegionBreak, Step: step})
+			i++
+			continue
 		}
 
 		// Horizontal rule (--- that's not a slide break, already handled)
@@ -1099,7 +1319,8 @@ func parseParagraph(lines []string, i int) (model.Block, int) {
 			isTaskListItem(trimmed) ||
 			isTableLine(trimmed) ||
 			trimmed == "---" || trimmed == "***" || trimmed == "___" ||
-			trimmed == "???" {
+			trimmed == "???" ||
+			trimmed == regionSentinel {
 			break
 		}
 		paraLines = append(paraLines, trimmed)
@@ -1153,6 +1374,15 @@ func joinParagraphLines(lines []string) string {
 // If incrementalLists is enabled, each list block is split into individual items,
 // each getting an incrementing step value. Then Slide.Steps is set to the max step.
 func applyRevealSteps(slide *model.Slide, deckMeta *model.DeckMeta) {
+	// If reveal is globally disabled, zero out all step values and return.
+	if deckMeta.GetDisableReveal() {
+		for i := range slide.Blocks {
+			slide.Blocks[i].Step = 0
+		}
+		slide.Steps = 0
+		return
+	}
+
 	// Determine if incremental lists are enabled for this slide.
 	// Slide-level setting overrides deck-level.
 	incremental := deckMeta.GetIncrementalLists()

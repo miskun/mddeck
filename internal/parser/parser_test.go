@@ -1035,7 +1035,10 @@ Third paragraph`
 }
 
 func TestIncrementalListsSplitsItems(t *testing.T) {
-	input := `- Alpha
+	input := `---
+incrementalLists: true
+---
+- Alpha
 - Beta
 - Gamma`
 
@@ -1087,7 +1090,11 @@ incrementalLists: false
 }
 
 func TestPauseWithIncrementalLists(t *testing.T) {
-	input := `# Title
+	input := `---
+incrementalLists: true
+---
+
+# Title
 
 . . .
 
@@ -1124,5 +1131,196 @@ Final paragraph`
 	}
 	if slide.Steps != 3 {
 		t.Errorf("slide.Steps = %d, want 3", slide.Steps)
+	}
+}
+
+func TestDisableRevealOverridesAll(t *testing.T) {
+	input := `---
+disableReveal: true
+---
+# Title
+
+. . .
+
+- First
+- Second
+
+. . .
+
+Final paragraph`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	slide := deck.Slides[0]
+	// All blocks should have Step 0, no reveal
+	for i, b := range slide.Blocks {
+		if b.Step != 0 {
+			t.Errorf("block %d step = %d, want 0", i, b.Step)
+		}
+	}
+	if slide.Steps != 0 {
+		t.Errorf("slide.Steps = %d, want 0", slide.Steps)
+	}
+	// List should NOT be expanded into individual items
+	listCount := 0
+	for _, b := range slide.Blocks {
+		if b.Type == model.BlockUnorderedList {
+			listCount++
+		}
+	}
+	if listCount != 1 {
+		t.Errorf("list blocks = %d, want 1 (should not be split)", listCount)
+	}
+}
+
+func TestRegionBreakTitleCols2(t *testing.T) {
+	// 1 heading + 1 region break → 3 sections (title + left + right) for title-cols-2.
+	// Deck FM first, then slide FM with layout, then content with --- region break.
+	input := `---
+title: test
+---
+---
+layout: title-cols-2
+---
+# Slide Title
+
+- bullet one
+- bullet two
+
+---
+
+` + "```art" + `
+  +---------+
+  | diagram |
+  +---------+
+` + "```"
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(deck.Slides) != 1 {
+		t.Fatalf("slides = %d, want 1", len(deck.Slides))
+	}
+	slide := deck.Slides[0]
+
+	// Should contain: heading, list, region-break, art block
+	hasBreak := false
+	for _, b := range slide.Blocks {
+		if b.Type == model.BlockRegionBreak {
+			hasBreak = true
+		}
+	}
+	if !hasBreak {
+		t.Error("expected BlockRegionBreak in slide blocks")
+	}
+}
+
+func TestRegionBreakCols2NoHeaders(t *testing.T) {
+	// 0 headings + 1 region break → 2 sections for cols-2.
+	input := `---
+title: test
+---
+---
+layout: cols-2
+---
+
+Left side content
+
+---
+
+Right side content`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(deck.Slides) != 1 {
+		t.Fatalf("slides = %d, want 1", len(deck.Slides))
+	}
+	slide := deck.Slides[0]
+
+	hasBreak := false
+	for _, b := range slide.Blocks {
+		if b.Type == model.BlockRegionBreak {
+			hasBreak = true
+		}
+	}
+	if !hasBreak {
+		t.Error("expected BlockRegionBreak in slide blocks")
+	}
+}
+
+func TestRegionBreakNotAbsorbedWhenHeadersSuffice(t *testing.T) {
+	// 3 headings for title-cols-2 (needs 3) → no merge, next slide stays separate.
+	input := `---
+title: test
+---
+---
+layout: title-cols-2
+---
+# Title
+
+## Left Column
+
+Left content
+
+## Right Column
+
+Right content
+
+---
+
+This is a separate slide`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(deck.Slides) != 2 {
+		t.Fatalf("slides = %d, want 2", len(deck.Slides))
+	}
+	// Second slide should just have paragraph content
+	s2 := deck.Slides[1]
+	if len(s2.Blocks) != 1 {
+		t.Fatalf("second slide blocks = %d, want 1", len(s2.Blocks))
+	}
+	if s2.Blocks[0].Type != model.BlockParagraph {
+		t.Errorf("second slide block type = %d, want BlockParagraph", s2.Blocks[0].Type)
+	}
+}
+
+func TestRegionBreakMixedWithHeaders(t *testing.T) {
+	// 1 heading + 1 region break for cols-2 (needs 2 sections) = enough.
+	// The third chunk stays separate.
+	input := `---
+title: test
+---
+---
+layout: cols-2
+---
+## Left Side
+
+Left content
+
+---
+
+Right content
+
+---
+
+Separate slide`
+
+	deck, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// The layout needs 2 regions. We have 1 heading (= 1 section) so we
+	// absorb 1 more chunk.  The third chunk is a separate slide.
+	if len(deck.Slides) != 2 {
+		t.Fatalf("slides = %d, want 2", len(deck.Slides))
 	}
 }

@@ -39,7 +39,8 @@ type DeckMeta struct {
 	SlideWidth       *int                     `yaml:"slideWidth"`       // slide stage width in chars (default 80, 0 = fill terminal, -1 = auto from aspect)
 	SlideHeight      *int                     `yaml:"slideHeight"`      // slide stage height in chars (default -1/auto, 0 = fill terminal)
 	SafeAnsi         *bool                    `yaml:"safeAnsi"`         // pointer so we can detect unset vs false
-	IncrementalLists *bool                    `yaml:"incrementalLists"` // auto-reveal list items one by one (default true)
+	IncrementalLists *bool                    `yaml:"incrementalLists"` // auto-reveal list items one by one (default false)
+	DisableReveal    *bool                    `yaml:"disableReveal"`    // disable all reveal effects (pause markers + incremental lists)
 	Layouts          map[string]CustomLayout  `yaml:"layouts"`          // user-defined or overridden layouts
 	Footer           Footer                   `yaml:"footer"`           // configurable footer sections
 }
@@ -159,12 +160,20 @@ func (d DeckMeta) GetSlideHeight() int {
 	return *d.SlideHeight
 }
 
-// GetIncrementalLists returns the effective incrementalLists setting (default true).
+// GetIncrementalLists returns the effective incrementalLists setting (default false).
 func (d DeckMeta) GetIncrementalLists() bool {
 	if d.IncrementalLists == nil {
-		return true
+		return false
 	}
 	return *d.IncrementalLists
+}
+
+// GetDisableReveal returns the effective disableReveal setting (default false).
+func (d DeckMeta) GetDisableReveal() bool {
+	if d.DisableReveal == nil {
+		return false
+	}
+	return *d.DisableReveal
 }
 
 // SlideMeta holds per-slide frontmatter.
@@ -211,6 +220,7 @@ const (
 	BlockTaskList
 	BlockTable
 	BlockAlert
+	BlockRegionBreak // region divider for multi-region layouts (not rendered)
 )
 
 // Block represents a parsed content block.

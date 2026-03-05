@@ -206,6 +206,16 @@ func (r *Renderer) renderGrid(slide *model.Slide, lr layout.LayoutResult, scr *s
 	majors := layout.SplitBlocksIntoMajor(slide.Blocks)
 	nRegions := len(lr.Regions)
 
+	// For title-row layouts, if we have fewer majors than regions and the
+	// first major has both a heading and content, auto-split: the heading
+	// becomes the title region, content flows into the next region.
+	if lr.HasTitleRow && len(majors) < nRegions && len(majors) > 0 &&
+		majors[0].Heading.Type != 0 && len(majors[0].Content) > 0 {
+		titleMaj := model.MajorBlock{Heading: majors[0].Heading}
+		contentMaj := model.MajorBlock{Content: majors[0].Content}
+		majors = append([]model.MajorBlock{titleMaj, contentMaj}, majors[1:]...)
+	}
+
 	// Distribute major blocks round-robin into region buckets
 	regionBlocks := make([][]model.Block, nRegions)
 	for i, maj := range majors {

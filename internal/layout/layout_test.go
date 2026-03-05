@@ -134,6 +134,66 @@ func TestSplitBlocksIntoMajor(t *testing.T) {
 	}
 }
 
+func TestSplitBlocksIntoMajorWithRegionBreak(t *testing.T) {
+	blocks := []model.Block{
+		{Type: model.BlockHeading, Level: 1, Raw: "Title"},
+		{Type: model.BlockParagraph, Raw: "Left content"},
+		{Type: model.BlockRegionBreak},
+		{Type: model.BlockParagraph, Raw: "Right content"},
+	}
+
+	majors := SplitBlocksIntoMajor(blocks)
+
+	if len(majors) != 2 {
+		t.Fatalf("majors = %d, want 2", len(majors))
+	}
+
+	// First major: heading + left content
+	if majors[0].Heading.Raw != "Title" {
+		t.Errorf("first major heading = %q, want %q", majors[0].Heading.Raw, "Title")
+	}
+	if len(majors[0].Content) != 1 || majors[0].Content[0].Raw != "Left content" {
+		t.Errorf("first major content = %v, want [Left content]", majors[0].Content)
+	}
+
+	// Second major: no heading, just right content
+	if majors[1].Heading.Type != 0 {
+		t.Errorf("second major should have no heading, got type %d", majors[1].Heading.Type)
+	}
+	if len(majors[1].Content) != 1 || majors[1].Content[0].Raw != "Right content" {
+		t.Errorf("second major content = %v, want [Right content]", majors[1].Content)
+	}
+}
+
+func TestSplitBlocksRegionBreakOnly(t *testing.T) {
+	// No headings at all, just region breaks
+	blocks := []model.Block{
+		{Type: model.BlockParagraph, Raw: "Section 1"},
+		{Type: model.BlockRegionBreak},
+		{Type: model.BlockParagraph, Raw: "Section 2"},
+		{Type: model.BlockRegionBreak},
+		{Type: model.BlockParagraph, Raw: "Section 3"},
+	}
+
+	majors := SplitBlocksIntoMajor(blocks)
+
+	if len(majors) != 3 {
+		t.Fatalf("majors = %d, want 3", len(majors))
+	}
+
+	for i, m := range majors {
+		if m.Heading.Type != 0 {
+			t.Errorf("major %d should have no heading", i)
+		}
+	}
+	if majors[0].Content[0].Raw != "Section 1" {
+		t.Errorf("major 0 content = %q, want Section 1", majors[0].Content[0].Raw)
+	}
+	if majors[2].Content[0].Raw != "Section 3" {
+		t.Errorf("major 2 content = %q, want Section 3", majors[2].Content[0].Raw)
+	}
+}
+
 func TestAspectPadding16x9(t *testing.T) {
 	// 16:9 aspect on a 120x40 terminal, slideWidth auto, slideHeight auto
 	vp := Viewport{Width: 120, Height: 40}
