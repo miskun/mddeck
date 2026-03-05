@@ -78,27 +78,10 @@ func (r *Renderer) RenderSlide(slide *model.Slide, vp layout.Viewport, step int)
 	lr := layout.ComputeLayout(visSlide, vp, &r.Deck.Meta)
 	scr := newScreenBuf(vp.Width, vp.Height)
 
-	// Configure padding background with content stage bounds
-	if r.Theme.PadBg != "" && len(lr.Regions) > 0 {
-		stageL := lr.Regions[0].X
-		stageT := lr.Regions[0].Y
-		stageR := lr.Regions[0].X + lr.Regions[0].Width
-		stageB := lr.Regions[0].Y + lr.Regions[0].Height
-		for _, reg := range lr.Regions[1:] {
-			if reg.X < stageL {
-				stageL = reg.X
-			}
-			if reg.Y < stageT {
-				stageT = reg.Y
-			}
-			if reg.X+reg.Width > stageR {
-				stageR = reg.X + reg.Width
-			}
-			if reg.Y+reg.Height > stageB {
-				stageB = reg.Y + reg.Height
-			}
-		}
-		scr.SetPadding(r.Theme.PadBg, stageL, stageT, stageR, stageB)
+	// Configure padding background using the full stage rectangle
+	if r.Theme.PadBg != "" {
+		s := lr.StageRect
+		scr.SetPadding(r.Theme.PadBg, s.X, s.Y, s.X+s.Width, s.Y+s.Height)
 	}
 
 	switch lr.Mode {

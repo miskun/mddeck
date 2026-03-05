@@ -567,6 +567,14 @@ The aspect ratio controls centering of the content stage within the terminal. Wh
 
 Layout padding (configurable via the `padding` field or per-layout `padX`/`padY`/`padTop`/`padBottom`/`padLeft`/`padRight`) is applied inside the content stage, independent of aspect ratio centering.
 
+### Stage Background (`PadBg`)
+
+By default the area outside the slide content (centering margins from aspect ratio) uses the terminal's own background — the slide blends seamlessly into the terminal.
+
+To visually distinguish the slide canvas from the surrounding terminal, set the `PadBg` field in a theme. This paints the area **outside** the content stage with a background color, making the slide boundary visible.
+
+Built-in themes leave `PadBg` empty (transparent). To enable it, override the theme in code or define a custom theme with `PadBg` set to an ANSI background escape (e.g. `ansi.BgRGB(28, 28, 34)` for a subtle dark border).
+
 ### Custom Layouts
 
 Define custom grid layouts in deck frontmatter under `layouts`. Custom layouts use the exact same parameters as built-in layouts — columns, rows, gutterX, gutterY, padding.
@@ -603,19 +611,19 @@ These fields apply to both custom layouts and built-in overrides:
 | `rows` | `[]int` | `[100]` | Row heights as percentages |
 | `gutterX` | int | `2` | Horizontal gap between columns in characters |
 | `gutterY` | int | `1` | Vertical gap between rows in lines |
-| `padX` | int | `1` | Horizontal padding (sets both left and right) |
+| `padX` | int | `2` | Horizontal padding (sets both left and right) |
 | `padY` | int | `1` | Vertical padding (sets both top and bottom) |
 | `padTop` | int | `1` | Top padding |
 | `padBottom` | int | `1` | Bottom padding |
-| `padLeft` | int | `1` | Left padding |
-| `padRight` | int | `1` | Right padding |
+| `padLeft` | int | `2` | Left padding |
+| `padRight` | int | `2` | Right padding |
 | `align` | enum | `"top"` | Content alignment within cells |
 
 #### Padding
 
 Padding controls the inset between the content stage and the layout regions. It is resolved in priority order (lowest to highest):
 
-1. **Hard-coded default**: 1 on all sides
+1. **Hard-coded default**: top=1, bottom=1, left=2, right=2
 2. **Deck-level `padding:`** in deck frontmatter (global override for all layouts)
 3. **Layout-level `padX`/`padY`** convenience fields (set both sides at once)
 4. **Layout-level `padTop`/`padBottom`/`padLeft`/`padRight`** (most specific)

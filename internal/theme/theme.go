@@ -48,7 +48,11 @@ type Theme struct {
 	AlertCaution   string // CAUTION callout color
 
 	// Padding / chrome
-	PadBg string // background color for padding area (empty = terminal default)
+	// PadBg paints the area outside the slide content stage (the centering
+	// margins from aspect ratio). Set to an ANSI background escape like
+	// ansi.BgRGB(28, 28, 34) to make the slide boundary visible.
+	// Empty (default) = transparent, uses the terminal's own background.
+	PadBg string
 	PadFg string // foreground color for padding area (empty = use Fg)
 
 	// UI elements

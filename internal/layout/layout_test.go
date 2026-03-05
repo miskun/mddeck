@@ -640,11 +640,11 @@ func TestBuiltinTitleCols2Layout(t *testing.T) {
 // --- Padding resolution tests ---
 
 func TestResolveEffectivePaddingDefaults(t *testing.T) {
-	// No deckMeta, no layout padding → all 1
+	// No deckMeta, no layout padding → defaults (top=1, bottom=1, left=2, right=2)
 	def := model.CustomLayout{}
 	top, bottom, left, right := resolveEffectivePadding(def, nil)
-	if top != 1 || bottom != 1 || left != 1 || right != 1 {
-		t.Errorf("defaults: got %d,%d,%d,%d, want 1,1,1,1", top, bottom, left, right)
+	if top != 1 || bottom != 1 || left != 2 || right != 2 {
+		t.Errorf("defaults: got %d,%d,%d,%d, want 1,1,2,2", top, bottom, left, right)
 	}
 }
 
@@ -708,16 +708,16 @@ func TestResolveEffectivePaddingPartialDeck(t *testing.T) {
 	}
 	def := model.CustomLayout{}
 	top, bottom, left, right := resolveEffectivePadding(def, dm)
-	if top != 3 || bottom != 1 || left != 1 || right != 1 {
-		t.Errorf("partial deck: got %d,%d,%d,%d, want 3,1,1,1", top, bottom, left, right)
+	if top != 3 || bottom != 1 || left != 2 || right != 2 {
+		t.Errorf("partial deck: got %d,%d,%d,%d, want 3,1,2,2", top, bottom, left, right)
 	}
 }
 
 func TestPaddingReducesUsableArea(t *testing.T) {
-	// 80×24 viewport with default padding of 1 on all sides.
+	// 80×24 viewport with default padding (top=1, bottom=1, left=2, right=2).
 	// slideWidth=80, slideHeight=23 (explicit, so no aspect centering).
 	// Stage: 80×23, padX=0, padY=0.
-	// After layout padding (1 on all sides): usable 78×21, starts at (1,1).
+	// After layout padding: usable 76×21, starts at (2,1).
 	w := 80
 	h := 23
 	dm := &model.DeckMeta{
@@ -740,14 +740,14 @@ func TestPaddingReducesUsableArea(t *testing.T) {
 		t.Fatalf("blank layout: got %d regions, want 1", len(result.Regions))
 	}
 	r := result.Regions[0]
-	if r.Width != 78 {
-		t.Errorf("region width = %d, want 78 (80 - 2*padding)", r.Width)
+	if r.Width != 76 {
+		t.Errorf("region width = %d, want 76 (80 - 2*padLeft/Right)", r.Width)
 	}
 	if r.Height != 21 {
-		t.Errorf("region height = %d, want 21 (23 - 2*padding)", r.Height)
+		t.Errorf("region height = %d, want 21 (23 - 2*padTop/Bottom)", r.Height)
 	}
-	if r.X != 1 {
-		t.Errorf("region X = %d, want 1 (padLeft)", r.X)
+	if r.X != 2 {
+		t.Errorf("region X = %d, want 2 (padLeft)", r.X)
 	}
 	if r.Y != 1 {
 		t.Errorf("region Y = %d, want 1 (padTop)", r.Y)

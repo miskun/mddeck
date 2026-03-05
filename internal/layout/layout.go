@@ -18,7 +18,8 @@ type Region struct {
 type LayoutResult struct {
 	Mode        model.Layout
 	Regions     []Region
-	HasTitleRow bool // first row is a dedicated title region (1 column, fixed height)
+	HasTitleRow bool   // first row is a dedicated title region (1 column, fixed height)
+	StageRect   Region // full stage area (before layout padding), for background fill
 }
 
 // Viewport describes the terminal dimensions.
@@ -144,13 +145,13 @@ func mergeCustomLayout(base, override model.CustomLayout) model.CustomLayout {
 
 // resolveEffectivePadding computes the final per-side padding values.
 // Resolution order (lowest → highest priority):
-//  1. Hard-coded default: 1 on all sides
+//  1. Hard-coded default: top=1, bottom=1, left=2, right=2
 //  2. Deck-level global padding (deckMeta.Padding)
 //  3. Layout-level PadX/PadY convenience fields (both sides at once)
 //  4. Layout-level PadTop/PadBottom/PadLeft/PadRight (most specific)
 func resolveEffectivePadding(def model.CustomLayout, deckMeta *model.DeckMeta) (top, bottom, left, right int) {
 	// 1. Hard-coded default
-	top, bottom, left, right = 1, 1, 1, 1
+	top, bottom, left, right = 1, 1, 2, 2
 
 	// 2. Deck-level global padding
 	if deckMeta != nil {
@@ -244,7 +245,9 @@ func ComputeLayout(slide *model.Slide, vp Viewport, deckMeta *model.DeckMeta) La
 		usableH = 1
 	}
 
-	return computeGrid(def, layout, vp, usableW, usableH, startX, startY)
+	result := computeGrid(def, layout, vp, usableW, usableH, startX, startY)
+	result.StageRect = Region{X: stagePadX, Y: stagePadY, Width: stageW, Height: stageH}
+	return result
 }
 
 // computeGrid creates a grid layout from a CustomLayout definition.
