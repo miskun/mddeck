@@ -12,9 +12,9 @@ Terminal-native Markdown slide deck presenter, written in Go. Renders `.mddeck` 
   - `internal/model/` — Core data types (Deck, Slide, Block)
   - `internal/parser/` — `.mddeck` file parser (frontmatter, slides, notes, blocks)
   - `internal/ansi/` — ANSI escape sequence handling and safety filtering
-  - `internal/theme/` — Color theme definitions (default, dark, light)
-  - `internal/layout/` — Layout engine (auto, title, center, cols-2, rows-2, cols-3, grid-4, sidebar, terminal)
-  - `internal/render/` — Markdown-to-ANSI renderer, presenter view, help overlay
+  - `internal/theme/` — Color theme definitions (default, dark, light); includes title style tokens (TitleStyle, SlideTitleStyle) with fallback getters, and per-level heading margin tokens
+  - `internal/layout/` — Layout engine (auto, title, section, title-body, title-cols-2, title-rows-2, title-grid-4, blank)
+  - `internal/render/` — Markdown-to-ANSI renderer with heading style overrides (headingOverrides), presenter view, help overlay
   - `internal/runtime/` — Terminal raw mode, keyboard event loop, navigation
 
 ## Build & Test
@@ -24,9 +24,69 @@ go build -o mddeck ./cmd/mddeck/  # build binary (always use -o to produce fresh
 go test ./...                      # run all tests
 ./mddeck example.md               # run with sample deck
 ./mddeck --present example.md     # presenter mode
+./mddeck --dump example.md        # dump all slides as text to stdout
+./mddeck --dump --format json example.md  # dump as structured JSON
 ```
 
 **Important:** `go build ./...` only checks compilation — it does NOT write an output binary. Always use `go build -o mddeck ./cmd/mddeck/` to produce a runnable binary. Do this after every code change so `./mddeck` is always up to date.
+
+## Slide Authoring: Multi-Region Layouts
+
+Multi-region layouts (`title-body`, `title-cols-2`, `title-rows-2`, `title-grid-4`) require multiple content regions. The parser's `mergeRegionChunks` pass automatically absorbs subsequent `---`-separated chunks to fill the required regions. Each absorbed boundary becomes a `BlockRegionBreak` that the layout engine uses to split content into columns/rows.
+
+This means a `---` between column blocks in a multi-region layout is **not** a slide separator — it is an intentional region boundary that gets merged into the same slide:
+
+```markdown
+---
+layout: title-cols-2
+---
+
+## Slide Title
+
+Left column content
+
+---
+
+Right column content
+```
+
+The `---` between the two content blocks looks like a slide break but is absorbed as the column boundary. The slide above produces one slide with a title and two columns.
+
+The number of regions consumed depends on the layout:
+- `title-body` → 2 regions (1 title + 1 body)
+- `title-cols-2` → 3 regions (1 title + 2 columns)
+- `title-rows-2` → 3 regions (1 title + 2 rows)
+- `title-grid-4` → 5 regions (1 title + 2×2 grid)
+
+## Layout Padding
+
+All layouts have per-side padding (top, bottom, left, right) that defaults to 1 on all sides. Padding is resolved in priority order: hard-coded default (1) → deck-level `padding:` → layout-level `padX`/`padY` → layout-level `padTop`/`padBottom`/`padLeft`/`padRight`. The `resolveEffectivePadding()` function in `internal/layout/layout.go` implements this resolution. Layout padding is applied inside the content stage (after aspect-ratio centering), not to be confused with the stage centering itself.
+
+## Debugging & Troubleshooting
+
+Use `--dump` mode to inspect parsed slide data without launching the TUI. This is the fastest way to verify what the parser produced, check block types, confirm reveal steps, or debug layout issues.
+
+```bash
+# Text dump of a single slide (1-based index)
+./mddeck --dump --slide 3 example.md
+
+# JSON dump — pipe to jq for targeted queries
+./mddeck --dump --format json example.md | jq '.slides[0].blocks'
+
+# Check block types across the whole deck
+./mddeck --dump --format json example.md | jq '[.slides[].blocks[].type] | unique'
+
+# Verify reveal steps on a specific slide
+./mddeck --dump --format json --slide 5 example.md | jq '.slides[0].steps, [.slides[0].blocks[] | {type, step}]'
+```
+
+Virtual viewport flags (`--width`, `--height`) force specific terminal dimensions in both dump and TUI modes. Use them for deterministic rendering in tests or to simulate specific terminal sizes:
+
+```bash
+./mddeck --width 120 --height 40 example.md          # TUI at fixed size
+```
+
+When `--dump` is set, `--present`, `--watch`, and `--start` are ignored — it outputs to stdout and exits immediately.
 
 ## Code Conventions
 

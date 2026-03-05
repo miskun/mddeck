@@ -50,6 +50,10 @@ type Runtime struct {
 	prevWidth  int
 	prevHeight int
 
+	// Virtual viewport overrides (0 = use terminal)
+	vpWidth  int
+	vpHeight int
+
 	// Terminal state
 	oldState *term.State
 }
@@ -62,6 +66,8 @@ type Config struct {
 	SafeANSI    *bool
 	AutoAdvance time.Duration
 	Loop        bool
+	Width       int // virtual viewport width (0 = use terminal)
+	Height      int // virtual viewport height (0 = use terminal)
 }
 
 // New creates a new runtime.
@@ -88,6 +94,9 @@ func New(deck *model.Deck, cfg Config) *Runtime {
 	if cfg.Presenter {
 		r.mode = ModePresenter
 	}
+
+	r.vpWidth = cfg.Width
+	r.vpHeight = cfg.Height
 
 	if cfg.StartAt > 0 && cfg.StartAt <= len(deck.Slides) {
 		r.current = cfg.StartAt - 1
@@ -458,7 +467,13 @@ func (rt *Runtime) getViewport() layout.Viewport {
 	if err != nil {
 		w, h = 80, 24
 	}
-
+	// Apply virtual viewport overrides
+	if rt.vpWidth > 0 {
+		w = rt.vpWidth
+	}
+	if rt.vpHeight > 0 {
+		h = rt.vpHeight
+	}
 	return layout.Viewport{Width: w, Height: h}
 }
 
