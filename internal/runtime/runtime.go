@@ -36,6 +36,12 @@ type Runtime struct {
 	startTime time.Time
 	running   bool
 
+	// Auto-advance timer
+	autoAdvanceDuration time.Duration
+	autoAdvanceTimer    *time.Timer
+	paused              bool
+	loop                bool
+
 	// Channel for resize events
 	resizeCh chan struct{}
 
@@ -54,12 +60,14 @@ type Runtime struct {
 
 // Config holds runtime configuration.
 type Config struct {
-	Presenter bool
-	StartAt   int // 1-based slide number
-	Theme     string
-	SafeANSI  *bool
-	Width     int // virtual viewport width (0 = use terminal)
-	Height    int // virtual viewport height (0 = use terminal)
+	Presenter   bool
+	StartAt     int // 1-based slide number
+	Theme       string
+	SafeANSI    *bool
+	AutoAdvance time.Duration
+	Loop        bool
+	Width       int // virtual viewport width (0 = use terminal)
+	Height      int // virtual viewport height (0 = use terminal)
 }
 
 // New creates a new runtime.
@@ -92,6 +100,13 @@ func New(deck *model.Deck, cfg Config) *Runtime {
 
 	if cfg.StartAt > 0 && cfg.StartAt <= len(deck.Slides) {
 		r.current = cfg.StartAt - 1
+	}
+
+	// Initialize auto-advance timer if configured
+	if cfg.AutoAdvance > 0 {
+		r.autoAdvanceDuration = cfg.AutoAdvance
+		r.autoAdvanceTimer = time.NewTimer(cfg.AutoAdvance)
+		r.loop = cfg.Loop
 	}
 
 	return r
@@ -144,6 +159,12 @@ func (rt *Runtime) Run() error {
 	timerTick := time.NewTicker(1 * time.Second)
 	defer timerTick.Stop()
 
+	// Auto-advance timer channel
+	var autoAdvanceTimerCh <-chan time.Time
+	if rt.autoAdvanceTimer != nil {
+		autoAdvanceTimerCh = rt.autoAdvanceTimer.C
+	}
+
 	for rt.running {
 		select {
 		case data, ok := <-inputCh:
@@ -169,6 +190,27 @@ func (rt *Runtime) Run() error {
 			if rt.mode == ModePresenter {
 				rt.render()
 			}
+		case <-autoAdvanceTimerCh:
+			// Auto-advance to next slide if not paused
+			if !rt.paused {
+				slide := &rt.Deck.Slides[rt.current]
+				// Check if we're at the last slide and last reveal step
+				atEnd := rt.current == len(rt.Deck.Slides)-1 && rt.step >= slide.Steps
+				
+				if atEnd && rt.loop {
+					// Loop back to first slide
+					rt.current = 0
+					rt.step = 0
+					rt.render()
+				} else if !atEnd {
+					// Continue advancing
+					rt.nextSlide()
+				}
+			}
+			// Reset timer for next advance
+			if rt.autoAdvanceTimer != nil {
+				rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+			}
 		}
 	}
 
@@ -177,6 +219,10 @@ func (rt *Runtime) Run() error {
 
 // cleanup restores terminal state.
 func (rt *Runtime) cleanup() {
+	// Stop auto-advance timer
+	if rt.autoAdvanceTimer != nil {
+		rt.autoAdvanceTimer.Stop()
+	}
 	// Show cursor and leave alternate screen buffer (restores original content)
 	fmt.Print("\x1b[?25h\x1b[?1049l")
 	// Restore terminal
@@ -207,21 +253,47 @@ func (rt *Runtime) handleInput(data []byte) {
 	case data[0] == 'q' || data[0] == 'Q':
 		rt.running = false
 
-	// Space, Enter
-	case data[0] == ' ' || data[0] == '\r' || data[0] == '\n':
+	// Space - pause/resume auto-advance, otherwise next slide
+	case data[0] == ' ':
+		if rt.autoAdvanceTimer != nil {
+			rt.paused = !rt.paused
+			if rt.paused {
+				rt.autoAdvanceTimer.Stop()
+			} else {
+				rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+			}
+			rt.render()
+		} else {
+			rt.nextSlide()
+		}
+
+	// Enter
+	case data[0] == '\r' || data[0] == '\n':
 		rt.nextSlide()
+		if rt.autoAdvanceTimer != nil && !rt.paused {
+			rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+		}
 
 	// 'n'
 	case data[0] == 'n' || data[0] == 'N':
 		rt.nextSlide()
+		if rt.autoAdvanceTimer != nil && !rt.paused {
+			rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+		}
 
 	// 'p'
 	case data[0] == 'p' || data[0] == 'P':
 		rt.prevSlide()
+		if rt.autoAdvanceTimer != nil && !rt.paused {
+			rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+		}
 
 	// Backspace
 	case data[0] == 127 || data[0] == 8:
 		rt.prevSlide()
+		if rt.autoAdvanceTimer != nil && !rt.paused {
+			rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+		}
 
 	// '?'
 	case data[0] == '?':
@@ -252,27 +324,51 @@ func (rt *Runtime) handleEscapeSequence(data []byte) {
 		switch data[2] {
 		case 'C': // Right arrow
 			rt.nextSlide()
+			if rt.autoAdvanceTimer != nil && !rt.paused {
+				rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+			}
 		case 'D': // Left arrow
 			rt.prevSlide()
+			if rt.autoAdvanceTimer != nil && !rt.paused {
+				rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+			}
 		case '5': // Page Up
 			if len(data) >= 4 && data[3] == '~' {
 				rt.prevSlide()
+				if rt.autoAdvanceTimer != nil && !rt.paused {
+					rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+				}
 			}
 		case '6': // Page Down
 			if len(data) >= 4 && data[3] == '~' {
 				rt.nextSlide()
+				if rt.autoAdvanceTimer != nil && !rt.paused {
+					rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+				}
 			}
 		case 'H': // Home
 			rt.firstSlide()
+			if rt.autoAdvanceTimer != nil && !rt.paused {
+				rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+			}
 		case 'F': // End
 			rt.lastSlide()
+			if rt.autoAdvanceTimer != nil && !rt.paused {
+				rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+			}
 		case '1': // Home (alternate)
 			if len(data) >= 4 && data[3] == '~' {
 				rt.firstSlide()
+				if rt.autoAdvanceTimer != nil && !rt.paused {
+					rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+				}
 			}
 		case '4': // End (alternate)
 			if len(data) >= 4 && data[3] == '~' {
 				rt.lastSlide()
+				if rt.autoAdvanceTimer != nil && !rt.paused {
+					rt.autoAdvanceTimer.Reset(rt.autoAdvanceDuration)
+				}
 			}
 		}
 	}

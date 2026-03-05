@@ -26,6 +26,8 @@ func main() {
 	unsafeAnsi := flag.Bool("unsafe-ansi", false, "Disable safe ANSI mode")
 	startAt := flag.Int("start", 0, "Start at slide number (1-based)")
 	watch := flag.Bool("watch", false, "Reload on file change")
+	autoAdvance := flag.String("auto-advance", "", "Auto-advance slides after duration (e.g., 30s, 1m)")
+	loop := flag.Bool("loop", false, "Loop back to first slide when auto-advance reaches the end")
 	showVersion := flag.Bool("version", false, "Show version")
 
 	// Dump mode flags
@@ -83,6 +85,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Parse auto-advance duration
+	var autoAdvanceDuration time.Duration
+	if *autoAdvance != "" {
+		parsedDuration, err := time.ParseDuration(*autoAdvance)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: invalid auto-advance duration: %s\n", *autoAdvance)
+			fmt.Fprintf(os.Stderr, "Use format like: 30s, 1m, 1m30s\n")
+			os.Exit(1)
+		}
+		if parsedDuration < time.Second {
+			fmt.Fprintf(os.Stderr, "Error: auto-advance duration must be at least 1s\n")
+			os.Exit(1)
+		}
+		autoAdvanceDuration = parsedDuration
+	}
+
 	// Dump mode — output and exit without entering TUI
 	if *dump {
 		if *format != "text" && *format != "json" {
@@ -99,11 +117,13 @@ func main() {
 
 	// Build runtime config
 	cfg := runtime.Config{
-		Presenter: *present || *presentShort,
-		StartAt:   *startAt,
-		Theme:     *themeName,
-		Width:     *width,
-		Height:    *height,
+		Presenter:   *present || *presentShort,
+		StartAt:     *startAt,
+		Theme:       *themeName,
+		AutoAdvance: autoAdvanceDuration,
+		Loop:        *loop,
+		Width:       *width,
+		Height:      *height,
 	}
 
 	if *safeAnsi {
