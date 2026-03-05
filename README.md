@@ -29,6 +29,12 @@ mddeck --present slides.mddeck
 
 # Watch for file changes and reload
 mddeck --watch slides.mddeck
+
+# Auto-advance slides every 30 seconds
+mddeck --auto-advance 30s slides.mddeck
+
+# Auto-advance with looping (kiosk mode)
+mddeck --auto-advance 1m --loop slides.mddeck
 ```
 
 ## CLI
@@ -49,7 +55,19 @@ Both `.mddeck` and `.md` files are accepted — the parser operates on content, 
 | `--unsafe-ansi` | Disable safe ANSI mode |
 | `--start <n>` | Start at slide number (1-based) |
 | `--watch` | Reload on file change |
+| `--auto-advance <dur>` | Auto-advance slides after duration (e.g. `30s`, `1m`, `1m30s`) |
+| `--loop` | Loop back to first slide when auto-advance reaches the end |
 | `--version` | Show version |
+
+#### Dump Mode
+
+| Flag | Description |
+|------|-------------|
+| `--dump` | Dump slide data to stdout and exit (no TUI) |
+| `--format <fmt>` | Dump format: `text` (default) or `json` |
+| `--slide <n>` | Dump only slide N (1-based, 0=all) |
+| `--width <w>` | Virtual terminal width (0=auto) |
+| `--height <h>` | Virtual terminal height (0=auto) |
 
 ### Exit Codes
 
@@ -733,6 +751,7 @@ No scaling in v1.
 |-----|--------|
 | `t` | Toggle presenter mode |
 | `?` | Toggle help overlay |
+| Space (auto-advance) | Pause / resume auto-advance |
 | `q`, Ctrl+C | Quit |
 
 ### Presenter Mode
